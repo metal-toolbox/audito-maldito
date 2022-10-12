@@ -84,14 +84,22 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 		default:
 			c, nextErr := j.Next()
 			if errors.Is(nextErr, io.EOF) {
-				j.Wait(defaultSleep)
+				if r := j.Wait(defaultSleep); r == sdjournal.SD_JOURNAL_INVALIDATE {
+					log.Println("journaldProducer: Journal was invalidated, recreating reader")
+					j = initJournalReader(bootID)
+					continue
+				}
 				return
 			} else if nextErr != nil {
 				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr))
 			}
 
 			if c == 0 {
-				j.Wait(defaultSleep)
+				if r := j.Wait(defaultSleep); r == sdjournal.SD_JOURNAL_INVALIDATE {
+					log.Println("journaldProducer: Journal was invalidated, recreating reader")
+					j = initJournalReader(bootID)
+					continue
+				}
 				continue
 			}
 
