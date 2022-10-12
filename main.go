@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
@@ -40,12 +41,34 @@ var (
 	certIDRE = regexp.MustCompile(`ID (?P<UserID>\S+)\s+\(serial (?P<Serial>\d+)\)\s+(?P<CA>.+)`)
 )
 
+const (
+	// determines where to start reading the journal from
+	timeFlushPath = "/var/run/audito-maldito/flush_time"
+)
+
 func getMachineID() (string, error) {
 	machineID, err := os.ReadFile("/etc/machine-id")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(machineID)), nil
+}
+
+// Reads the last read position so we can start the journal reading from here
+// We ignore errors and just read from the beginning if needed.
+func readLastRead() uint64 {
+	f, err := os.Open(timeFlushPath)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	var lastRead uint64
+	_, err = fmt.Fscanf(f, "%d", &lastRead)
+	if err != nil {
+		return 0
+	}
+	return lastRead
 }
 
 func initJournalReader(mid string, bootID string) *sdjournal.Journal {
@@ -87,6 +110,15 @@ func initJournalReader(mid string, bootID string) *sdjournal.Journal {
 	}
 
 	j.AddMatch(matchBootID.String())
+
+	// Attempt to get the last read position from the journal
+	lastRead := readLastRead()
+	if lastRead != 0 {
+		log.Printf("journaldConsumer: Last read position: %d", lastRead)
+		j.SeekRealtimeUsec(lastRead + 1)
+	} else {
+		log.Printf("journaldConsumer: No last read position found, reading from the beginning")
+	}
 
 	return j
 }
@@ -155,8 +187,39 @@ func extraDataWithCA(alg, keySum, certSerial, CAData string) (*json.RawMessage, 
 	return &rawmsg, err
 }
 
+// writes the last read timestamp to a file
+// Note we don't fail if we can't write the file nor read the directory
+// as we intend to go through the defer statements and exit.
+// If this fails, we will just start reading from the beginning of the journal
+func flushLastRead(lastReadToFlush *uint64) {
+	lastRead := atomic.LoadUint64(lastReadToFlush)
+
+	log.Printf("journaldConsumer: Last read position: %d", lastRead)
+
+	if err := ensureFlushDirectory(); err != nil {
+		log.Printf("journaldConsumer: Failed to ensure flush directory: %v", err)
+		return
+	}
+
+	f, err := os.OpenFile(timeFlushPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		log.Printf("failed to open flush file: %s", err)
+	}
+
+	defer f.Close()
+	f.WriteString(fmt.Sprintf("%d", lastRead))
+}
+
 func journaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-chan *sdjournal.JournalEntry) {
+	var currentRead uint64 = 0
 	defer wg.Done()
+
+	defer flushLastRead(&currentRead)
+
+	mid, miderr := getMachineID()
+	if miderr != nil {
+		log.Fatal(fmt.Errorf("failed to get machine id: %w", miderr))
+	}
 
 	for {
 		select {
@@ -200,7 +263,8 @@ func journaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 					"sshd",
 				).WithTarget(map[string]string{
 					// TODO(jaosorior): Get host
-					"host": "my-host",
+					"host":       "my-host",
+					"machine-id": mid,
 				})
 
 				certIdentifierStringStart := len(matches[0]) + 1
@@ -233,10 +297,24 @@ func journaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 				}
 
 				log.Printf("audit event %v", evt)
-				log.Printf("cursor: %v", msg.Cursor)
+				atomic.StoreUint64(&currentRead, msg.RealtimeTimestamp)
 			}
 		}
 	}
+}
+
+func ensureFlushDirectory() error {
+	_, err := os.Stat(filepath.Dir(timeFlushPath))
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(filepath.Dir(timeFlushPath), 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create flush directory: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to access flush directory: %w", err)
+	}
+
+	return nil
 }
 
 func main() {
@@ -251,6 +329,10 @@ func main() {
 	flag.Parse()
 
 	var wg sync.WaitGroup
+
+	if err := ensureFlushDirectory(); err != nil {
+		log.Fatal(err)
+	}
 
 	journaldChan := make(chan *sdjournal.JournalEntry, 1000)
 	log.Println("Starting workers")

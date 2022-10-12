@@ -1,4 +1,4 @@
-FROM registry.fedoraproject.org/fedora-minimal:36
+FROM registry.fedoraproject.org/fedora-minimal:36 AS builder
 
 RUN microdnf install -y systemd-devel golang && microdnf clean all
 
@@ -10,4 +10,11 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -o /usr/bin/audito-maldito
+RUN go build -o audito-maldito
+
+# Not using distroless nor scratch because we need the systemd shared libraries
+FROM registry.fedoraproject.org/fedora-minimal:36
+
+COPY --from=builder /go/src/audito-maldito/audito-maldito /usr/bin/audito-maldito
+
+ENTRYPOINT [ "/usr/bin/audito-maldito" ]
