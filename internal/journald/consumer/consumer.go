@@ -82,7 +82,7 @@ func flushLastRead(lastReadToFlush *uint64) {
 	f.WriteString(fmt.Sprintf("%d", lastRead))
 }
 
-func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-chan *sdjournal.JournalEntry) {
+func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-chan *sdjournal.JournalEntry, w *auditevent.EventWriter) {
 	var currentRead uint64 = 0
 	defer wg.Done()
 
@@ -97,8 +97,6 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 	if nodenameerr != nil {
 		log.Fatal(fmt.Errorf("failed to get node name: %w", nodenameerr))
 	}
-
-	w := auditevent.NewDefaultAuditEventWriter(os.Stdout)
 
 	for {
 		select {
