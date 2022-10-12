@@ -79,7 +79,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("journaldProducer: Interrupt received, exiting")
+			log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
 			return
 		default:
 			c, nextErr := j.Next()
@@ -98,7 +98,6 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				if r := j.Wait(defaultSleep); r == sdjournal.SD_JOURNAL_INVALIDATE {
 					log.Println("journaldProducer: Journal was invalidated, recreating reader")
 					j = initJournalReader(bootID)
-					continue
 				}
 				continue
 			}
@@ -109,7 +108,12 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				continue
 			}
 
-			journaldChan <- entry
+			select {
+			case journaldChan <- entry:
+			case <-ctx.Done():
+				log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
+				return
+			}
 		}
 	}
 }
