@@ -6,16 +6,20 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
-func initJournalReader(mid string, bootID string) *sdjournal.Journal {
-	j, err := sdjournal.NewJournalFromFiles(filepath.Join("/var/log/journal", mid, "system.journal"))
+var (
+	defaultSleep = 10 * time.Millisecond
+)
+
+func initJournalReader(bootID string) *sdjournal.Journal {
+	j, err := sdjournal.NewJournal()
 
 	if bootID == "" {
 		var err error
@@ -69,13 +73,7 @@ func initJournalReader(mid string, bootID string) *sdjournal.Journal {
 func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *sdjournal.JournalEntry, bootID string) {
 	defer wg.Done()
 
-	mid, miderr := common.GetMachineID()
-	if miderr != nil {
-		log.Fatal(fmt.Errorf("failed to get machine id: %w", miderr))
-	}
-	log.Printf("Machine-ID: %s\n", mid)
-
-	j := initJournalReader(mid, bootID)
+	j := initJournalReader(bootID)
 	defer j.Close()
 
 	for {
@@ -87,19 +85,20 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 		default:
 			c, nextErr := j.Next()
 			if errors.Is(nextErr, io.EOF) {
-				// TODO wait
+				time.Sleep(defaultSleep)
 				return
 			} else if nextErr != nil {
 				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr))
 			}
 
 			if c == 0 {
+				time.Sleep(defaultSleep)
 				continue
 			}
 
 			entry, geErr := j.GetEntry()
 			if geErr != nil {
-				log.Println("journaldProducer: Error getting entry")
+				log.Printf("journaldProducer: Error getting entry: %v", geErr)
 				continue
 			}
 
