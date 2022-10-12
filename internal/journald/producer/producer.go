@@ -80,7 +80,6 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 		select {
 		case <-ctx.Done():
 			log.Println("journaldProducer: Interrupt received, exiting")
-			// TODO(jaosorior): Store the last read position in the journal
 			return
 		default:
 			c, nextErr := j.Next()
