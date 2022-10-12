@@ -93,6 +93,13 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 		log.Fatal(fmt.Errorf("failed to get machine id: %w", miderr))
 	}
 
+	nodename, nodenameerr := common.GetNodeName()
+	if nodenameerr != nil {
+		log.Fatal(fmt.Errorf("failed to get node name: %w", nodenameerr))
+	}
+
+	w := auditevent.NewDefaultAuditEventWriter(os.Stdout)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -134,8 +141,7 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 					},
 					"sshd",
 				).WithTarget(map[string]string{
-					// TODO(jaosorior): Get host
-					"host":       "my-host",
+					"host":       nodename,
 					"machine-id": mid,
 				})
 
@@ -168,7 +174,7 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 					evt = evt.WithData(ed)
 				}
 
-				log.Printf("audit event %v", evt)
+				w.Write(evt)
 				atomic.StoreUint64(&currentRead, msg.RealtimeTimestamp)
 			}
 		}

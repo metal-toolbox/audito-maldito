@@ -1,6 +1,16 @@
 .PHONY: all
 all: image run-test
 
+.PHONY: unit-test
+unit-test:
+	@echo "Running unit tests"
+	@go test -v ./...
+
+.PHONY: lint
+lint:
+	@echo "Running linter"
+	@golangci-lint run
+
 .PHONY: image
 image:
 	docker build -t localbuild/audito-maldito:latest .
@@ -8,6 +18,7 @@ image:
 .PHONY: run-test
 run-test:
 	docker run -ti \
+		-e NODE_NAME=my-funky-node-name \
 		-v $$PWD/journal:/var/log/journal/b3f9b6f421fc4af5b8770b54ebceb5ca/system.journal:ro \
 		-v $$PWD/machine-id:/etc/machine-id:ro \
 		-v $$PWD/machine-id:/var/lib/dbus/machine-id:ro \

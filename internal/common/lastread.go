@@ -14,7 +14,12 @@ const (
 // GetLastRead reads the last read position so we can start the journal reading from here
 // We ignore errors and just read from the beginning if needed.
 func GetLastRead() uint64 {
-	f, err := os.Open(TimeFlushPath)
+	return doGetLastRead(TimeFlushPath)
+}
+
+// Makes GetLastRead testable
+func doGetLastRead(path string) uint64 {
+	f, err := os.Open(path)
 	if err != nil {
 		return 0
 	}
