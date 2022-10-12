@@ -7,7 +7,11 @@ import (
 )
 
 const (
-	// TimeFlushPath determines where to start reading the journal from
+	// TimeFlushPath is a file that contains the timestamp
+	// of the last-read journal entry.
+	//
+	// Refer to the RealtimeTimestamp field in the
+	// sdjournal.JournalEntry struct for details.
 	TimeFlushPath = "/var/run/audito-maldito/flush_time"
 )
 

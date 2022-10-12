@@ -66,20 +66,20 @@ func extraDataWithCA(alg, keySum, certSerial, CAData string) (*json.RawMessage, 
 func flushLastRead(lastReadToFlush *uint64) {
 	lastRead := atomic.LoadUint64(lastReadToFlush)
 
-	log.Printf("journaldConsumer: Last read position: %d", lastRead)
+	log.Printf("journaldConsumer: Flushing last read timestamp %d", lastRead)
 
 	if err := common.EnsureFlushDirectory(); err != nil {
 		log.Printf("journaldConsumer: Failed to ensure flush directory: %v", err)
 		return
 	}
 
-	f, err := os.OpenFile(common.TimeFlushPath, os.O_CREATE|os.O_WRONLY, 0600)
+	// The WriteFile function ensures the file will only contain
+	// *exactly* what we write to it by either creating a new file,
+	// or by truncating an existing file.
+	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), 0600)
 	if err != nil {
-		log.Printf("failed to open flush file: %s", err)
+		log.Printf("journaldConsumer: failed to write flush file: %s", err)
 	}
-
-	defer f.Close()
-	f.WriteString(fmt.Sprintf("%d", lastRead))
 }
 
 func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-chan *sdjournal.JournalEntry, w *auditevent.EventWriter) {
