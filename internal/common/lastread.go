@@ -15,6 +15,10 @@ const (
 	TimeFlushPath = "/var/run/audito-maldito/flush_time"
 )
 
+const (
+	flushDirPerms = 0o750
+)
+
 // GetLastRead reads the last read position so we can start the journal reading from here
 // We ignore errors and just read from the beginning if needed.
 func GetLastRead() uint64 {
@@ -41,7 +45,7 @@ func doGetLastRead(path string) uint64 {
 func EnsureFlushDirectory() error {
 	_, err := os.Stat(filepath.Dir(TimeFlushPath))
 	if os.IsNotExist(err) {
-		err := os.MkdirAll(filepath.Dir(TimeFlushPath), 0o755)
+		err := os.MkdirAll(filepath.Dir(TimeFlushPath), flushDirPerms)
 		if err != nil {
 			return fmt.Errorf("failed to create flush directory: %w", err)
 		}

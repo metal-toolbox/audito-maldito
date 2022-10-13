@@ -28,8 +28,13 @@ const (
 	idxCertCA        = "CA"
 )
 
+const (
+	onlyUserReadable = 0o600
+)
+
 var (
-	loginRE  = regexp.MustCompile(`Accepted publickey for (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w_ -]+):(?P<SSHKeySum>\S+)`)
+	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
+	loginRE  = regexp.MustCompile(`Accepted publickey for (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
 	certIDRE = regexp.MustCompile(`ID (?P<UserID>\S+)\s+\(serial (?P<Serial>\d+)\)\s+(?P<CA>.+)`)
 )
 
@@ -43,12 +48,12 @@ func extraDataWithoutCA(alg, keySum string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func extraDataWithCA(alg, keySum, certSerial, CAData string) (*json.RawMessage, error) {
+func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, error) {
 	extraData := map[string]string{
 		idxLoginAlg:   alg,
 		idxSSHKeySum:  keySum,
 		idxCertSerial: certSerial,
-		idxCertCA:     CAData,
+		idxCertCA:     caData,
 	}
 	raw, err := json.Marshal(extraData)
 	rawmsg := json.RawMessage(raw)
@@ -72,17 +77,20 @@ func flushLastRead(lastReadToFlush *uint64) {
 	// The WriteFile function ensures the file will only contain
 	// *exactly* what we write to it by either creating a new file,
 	// or by truncating an existing file.
-	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), 0o600)
+	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), onlyUserReadable)
 	if err != nil {
 		log.Printf("journaldConsumer: failed to write flush file: %s", err)
 	}
 }
 
-func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-chan *types.LogEntry, w *auditevent.EventWriter) {
-	var currentRead uint64 = 0
-	defer wg.Done()
-
-	defer flushLastRead(&currentRead)
+// JournaldConsumer is the main loop that consumes journald log entries.
+func JournaldConsumer(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	journaldChan <-chan *types.LogEntry,
+	w *auditevent.EventWriter,
+) {
+	var currentRead uint64
 
 	mid, miderr := common.GetMachineID()
 	if miderr != nil {
@@ -93,6 +101,10 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 	if nodenameerr != nil {
 		log.Fatal(fmt.Errorf("failed to get node name: %w", nodenameerr))
 	}
+
+	defer wg.Done()
+
+	defer flushLastRead(&currentRead)
 
 	for {
 		select {
@@ -120,7 +132,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	if ederr != nil {
 		log.Println("journaldConsumer: Failed to create extra data for login event")
 	} else {
-		evt = evt.WithData(ed)
+		evt.WithData(ed)
 	}
 }
 
@@ -160,7 +172,11 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 	if len(logentry) == len(matches[0]) {
 		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		w.Write(evt)
+		if err := w.Write(evt); err != nil {
+			// NOTE(jaosorior): Not being able to write audit events
+			// merits us panicking here.
+			log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		}
 		return
 	}
 
@@ -170,7 +186,11 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 	if idMatches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		w.Write(evt)
+		if err := w.Write(evt); err != nil {
+			// NOTE(jaosorior): Not being able to write audit events
+			// merits us panicking here.
+			log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		}
 		return
 	}
 
@@ -187,7 +207,11 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 		evt = evt.WithData(ed)
 	}
 
-	w.Write(evt)
+	if err := w.Write(evt); err != nil {
+		// NOTE(jaosorior): Not being able to write audit events
+		// merits us panicking here.
+		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+	}
 }
 
 func getCertificateInvalidReason(logentry string) string {
@@ -237,7 +261,11 @@ func processCertificateInvalidEntry(logentry, nodename, mid string, w *auditeven
 		evt = evt.WithData(ed)
 	}
 
-	w.Write(evt)
+	if err := w.Write(evt); err != nil {
+		// NOTE(jaosorior): Not being able to write audit events
+		// merits us panicking here.
+		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+	}
 }
 
 func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {

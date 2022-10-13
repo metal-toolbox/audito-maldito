@@ -16,6 +16,13 @@ import (
 
 var defaultSleep = 10 * time.Millisecond
 
+func resetJournal(j JournalReader, bootID string) JournalReader {
+	if err := j.Close(); err != nil {
+		log.Printf("journaldProducer: failed to close journal: %v", err)
+	}
+	return newJournalReader(bootID)
+}
+
 func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
 	defer wg.Done()
 
@@ -32,18 +39,24 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			if errors.Is(nextErr, io.EOF) {
 				if r := j.Wait(defaultSleep); r < 0 {
 					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
-					j = newJournalReader(bootID)
+					j = resetJournal(j, bootID)
 					continue
 				}
 				return
 			} else if nextErr != nil {
+				if err := j.Close(); err != nil {
+					log.Printf("journaldProducer: failed to close journal: %v", err)
+				}
+				// TODO(jaosorior): Figure out a way to not panic here.
+				// Maybe closing the journaldChan?
+				//nolint:gocritic // We call Close above
 				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr))
 			}
 
 			if c == 0 {
 				if r := j.Wait(defaultSleep); r < 0 {
 					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
-					j = newJournalReader(bootID)
+					j = resetJournal(j, bootID)
 				}
 				continue
 			}

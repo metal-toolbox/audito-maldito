@@ -9,6 +9,8 @@ import (
 )
 
 func Test_GetLastRead(t *testing.T) {
+	t.Parallel()
+
 	tmpdir := t.TempDir()
 
 	type args struct {
@@ -44,6 +46,7 @@ func Test_GetLastRead(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			path := filepath.Join(tmpdir, tt.name)
 			f, err := os.Create(path)
 			assert.NoError(t, err)

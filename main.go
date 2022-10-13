@@ -18,33 +18,38 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
-func main() {
+const (
+	journalEntryBufferSize = 1000
+)
+
+func mainWithExitCode() int {
 	var bootID string
 	var auditlogpath string
+	var wg sync.WaitGroup
 
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
 	flag.StringVar(&bootID, "boot-id", "", "Boot-ID to read from the journal")
 	flag.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 
+	flag.Parse()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	flag.Parse()
-
-	var wg sync.WaitGroup
-
 	if err := common.EnsureFlushDirectory(); err != nil {
-		log.Fatal(err)
+		log.Printf("Error: failed to ensure flush directory: %v", err)
+		return 1
 	}
 
 	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditlogpath)
 	if auditfileerr != nil {
-		log.Fatal(auditfileerr)
+		log.Printf("Error: failed to open audit log file: %v", auditfileerr)
+		return 1
 	}
 
 	w := auditevent.NewDefaultAuditEventWriter(auf)
 
-	journaldChan := make(chan *types.LogEntry, 1000)
+	journaldChan := make(chan *types.LogEntry, journalEntryBufferSize)
 	log.Println("Starting workers")
 
 	wg.Add(1)
@@ -55,4 +60,9 @@ func main() {
 	wg.Wait()
 
 	log.Println("All workers finished")
+	return 0
+}
+
+func main() {
+	os.Exit(mainWithExitCode())
 }
