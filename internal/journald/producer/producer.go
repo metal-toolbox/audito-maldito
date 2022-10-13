@@ -84,8 +84,8 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 		default:
 			c, nextErr := j.Next()
 			if errors.Is(nextErr, io.EOF) {
-				if r := j.Wait(defaultSleep); r == sdjournal.SD_JOURNAL_INVALIDATE {
-					log.Println("journaldProducer: Journal was invalidated, recreating reader")
+				if r := j.Wait(defaultSleep); r < 0 {
+					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
 					j = initJournalReader(bootID)
 					continue
 				}
@@ -95,8 +95,8 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			}
 
 			if c == 0 {
-				if r := j.Wait(defaultSleep); r == sdjournal.SD_JOURNAL_INVALIDATE {
-					log.Println("journaldProducer: Journal was invalidated, recreating reader")
+				if r := j.Wait(defaultSleep); r < 0 {
+					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
 					j = initJournalReader(bootID)
 				}
 				continue
