@@ -24,15 +24,6 @@ type journalReaderImpl struct {
 
 func newJournalReader(bootID string) JournalReader {
 	j, err := sdjournal.NewJournal()
-
-	if bootID == "" {
-		var err error
-		bootID, err = j.GetBootID()
-		if err != nil {
-			log.Fatal(fmt.Errorf("failed to get boot id: %w", err))
-		}
-	}
-
 	if err != nil {
 		log.Fatal(fmt.Errorf("failed to open journal: %w", err))
 	}
@@ -41,17 +32,24 @@ func newJournalReader(bootID string) JournalReader {
 		log.Fatal(fmt.Errorf("journal is nil"))
 	}
 
+	if bootID == "" {
+		var err error
+		bootID, err = j.GetBootID()
+		if err != nil {
+			log.Fatal(fmt.Errorf("failed to get boot id from journal: %w", err))
+		}
+	}
+
 	// Initialize/restart the journal reader.
 	j.FlushMatches()
 
-	// NOTE(jaosorior): This only works for Flatcar
 	matchSSH := getDistroSpecificMatch()
 
 	if err := j.AddMatch(matchSSH.String()); err != nil {
-		log.Fatal(fmt.Errorf("failed to add match: %w", err))
+		log.Fatal(fmt.Errorf("failed to add ssh match: %w", err))
 	}
 
-	log.Printf("Boot-ID: %s\n", bootID)
+	log.Printf("got boot id: %s", bootID)
 
 	// NOTE(jaosorior): We only care about the current boot
 	matchBootID := sdjournal.Match{
@@ -60,7 +58,7 @@ func newJournalReader(bootID string) JournalReader {
 	}
 
 	if err := j.AddMatch(matchBootID.String()); err != nil {
-		log.Fatal(fmt.Errorf("failed to add match: %w", err))
+		log.Fatal(fmt.Errorf("failed to add boot id match: %w", err))
 	}
 
 	// Attempt to get the last read position from the journal
