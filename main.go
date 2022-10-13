@@ -9,13 +9,13 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/coreos/go-systemd/v22/sdjournal"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/consumer"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/producer"
+	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
 func main() {
@@ -44,7 +44,7 @@ func main() {
 
 	w := auditevent.NewDefaultAuditEventWriter(auf)
 
-	journaldChan := make(chan *sdjournal.JournalEntry, 1000)
+	journaldChan := make(chan *types.LogEntry, 1000)
 	log.Println("Starting workers")
 
 	wg.Add(1)

@@ -12,6 +12,7 @@ import (
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
 var (
@@ -70,7 +71,7 @@ func initJournalReader(bootID string) *sdjournal.Journal {
 	return j
 }
 
-func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *sdjournal.JournalEntry, bootID string) {
+func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
 	defer wg.Done()
 
 	j := initJournalReader(bootID)
@@ -108,8 +109,19 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				continue
 			}
 
+			entryMsg, hasMessage := entry.Fields[sdjournal.SD_JOURNAL_FIELD_MESSAGE]
+			if !hasMessage {
+				log.Println("journaldConsumer: Got entry with no MESSAGE")
+				continue
+			}
+
+			lg := &types.LogEntry{
+				Timestamp: entry.RealtimeTimestamp,
+				Message:   entryMsg,
+			}
+
 			select {
-			case journaldChan <- entry:
+			case journaldChan <- lg:
 			case <-ctx.Done():
 				log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
 				return
