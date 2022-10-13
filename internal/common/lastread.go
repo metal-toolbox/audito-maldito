@@ -21,7 +21,7 @@ func GetLastRead() uint64 {
 	return doGetLastRead(TimeFlushPath)
 }
 
-// Makes GetLastRead testable
+// Makes GetLastRead testable.
 func doGetLastRead(path string) uint64 {
 	f, err := os.Open(path)
 	if err != nil {
@@ -37,11 +37,11 @@ func doGetLastRead(path string) uint64 {
 	return lastRead
 }
 
-// EnsureFlushDirectory ensures that the directory where we store the last read position exists
+// EnsureFlushDirectory ensures that the directory where we store the last read position exists.
 func EnsureFlushDirectory() error {
 	_, err := os.Stat(filepath.Dir(TimeFlushPath))
 	if os.IsNotExist(err) {
-		err := os.MkdirAll(filepath.Dir(TimeFlushPath), 0755)
+		err := os.MkdirAll(filepath.Dir(TimeFlushPath), 0o755)
 		if err != nil {
 			return fmt.Errorf("failed to create flush directory: %w", err)
 		}

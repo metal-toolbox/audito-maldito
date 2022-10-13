@@ -14,9 +14,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
-var (
-	defaultSleep = 10 * time.Millisecond
-)
+var defaultSleep = 10 * time.Millisecond
 
 func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
 	defer wg.Done()

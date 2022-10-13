@@ -6,6 +6,8 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 type testAuditEventEncoder struct {
