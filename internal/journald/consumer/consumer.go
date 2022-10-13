@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/metal-toolbox/auditevent"
 
@@ -112,11 +113,15 @@ func JournaldConsumer(
 			log.Println("journaldConsumer: Interrupt received, exiting")
 			return
 		case entry := <-journaldChan:
+			// This comes from journald's RealtimeTimestamp field.
+			usec := entry.Timestamp
+			ts := time.UnixMicro(int64(usec))
+
 			// This is an message that identifies a login
 			if strings.HasPrefix(entry.Message, "Accepted publickey") {
-				processAcceptPublicKeyEntry(entry.Message, mid, nodename, w)
+				processAcceptPublicKeyEntry(entry.Message, mid, nodename, ts, w)
 			} else if strings.HasPrefix(entry.Message, "Certificate invalid") {
-				processCertificateInvalidEntry(entry.Message, mid, nodename, w)
+				processCertificateInvalidEntry(entry.Message, mid, nodename, ts, w)
 			}
 
 			// Even if there was no match, we have already "processed" this
@@ -136,7 +141,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.EventWriter) {
+func processAcceptPublicKeyEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
 	matches := loginRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
@@ -149,7 +154,6 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 	algIdx := loginRE.SubexpIndex(idxLoginAlg)
 	keyIdx := loginRE.SubexpIndex(idxSSHKeySum)
 
-	// TODO(jaosorior): Overwrite timestamp with the one from the log entry
 	evt := auditevent.NewAuditEvent(
 		common.ActionLoginIdentifier,
 		auditevent.EventSource{
@@ -168,6 +172,8 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 		"host":       nodename,
 		"machine-id": mid,
 	})
+
+	evt.LoggedAt = when
 
 	if len(logentry) == len(matches[0]) {
 		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
@@ -225,10 +231,9 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(logentry, nodename, mid string, w *auditevent.EventWriter) {
+func processCertificateInvalidEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
 	reason := getCertificateInvalidReason(logentry)
 
-	// TODO(jaosorior): Overwrite timestamp with the one from the log entry
 	// TODO(jaosorior): Figure out smart way of getting the source
 	//                  For flatcar, we could get it from the CGROUP.... not sure for Ubuntu though
 	// e.g.
@@ -253,6 +258,8 @@ func processCertificateInvalidEntry(logentry, nodename, mid string, w *auditeven
 		"host":       nodename,
 		"machine-id": mid,
 	})
+
+	evt.LoggedAt = when
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {

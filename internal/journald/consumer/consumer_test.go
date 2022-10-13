@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
@@ -26,6 +27,7 @@ func compareAuditLogs(t *testing.T, want, got *auditevent.AuditEvent) {
 	t.Helper()
 
 	assert.Equal(t, want.Type, got.Type)
+	assert.Equal(t, want.LoggedAt, got.LoggedAt)
 	assert.Equal(t, want.Source.Type, got.Source.Type)
 	assert.Equal(t, want.Source.Value, got.Source.Value)
 	assert.Equal(t, want.Source.Extra, got.Source.Extra)
@@ -36,6 +38,9 @@ func compareAuditLogs(t *testing.T, want, got *auditevent.AuditEvent) {
 
 func Test_processAcceptPublicKeyEntry(t *testing.T) {
 	t.Parallel()
+
+	expectedts, tserr := time.Parse(time.RFC3339, "2666-06-06T00:00:00Z")
+	assert.NoError(t, tserr)
 
 	type args struct {
 		logentry string
@@ -56,7 +61,8 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 				mid:      "testmid",
 			},
 			want: &auditevent.AuditEvent{
-				Type: common.ActionLoginIdentifier,
+				Type:     common.ActionLoginIdentifier,
+				LoggedAt: expectedts,
 				Source: auditevent.EventSource{
 					Type:  "IP",
 					Value: "127.0.0.1",
@@ -85,7 +91,8 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 				mid:      "testmid",
 			},
 			want: &auditevent.AuditEvent{
-				Type: common.ActionLoginIdentifier,
+				Type:     common.ActionLoginIdentifier,
+				LoggedAt: expectedts,
 				Source: auditevent.EventSource{
 					Type:  "IP",
 					Value: "127.0.0.1",
@@ -113,7 +120,8 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 				mid:      "testmid",
 			},
 			want: &auditevent.AuditEvent{
-				Type: common.ActionLoginIdentifier,
+				Type:     common.ActionLoginIdentifier,
+				LoggedAt: expectedts,
 				Source: auditevent.EventSource{
 					Type:  "IP",
 					Value: "127.0.0.1",
@@ -139,7 +147,7 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 			t.Parallel()
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
-			processAcceptPublicKeyEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, w)
+			processAcceptPublicKeyEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, w)
 
 			compareAuditLogs(t, tt.want, enc.evt)
 
@@ -150,6 +158,9 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 
 func Test_processCertificateInvalidEntry(t *testing.T) {
 	t.Parallel()
+
+	expectedts, tserr := time.Parse(time.RFC3339, "2666-06-06T00:00:00Z")
+	assert.NoError(t, tserr)
 
 	type args struct {
 		logentry string
@@ -169,7 +180,8 @@ func Test_processCertificateInvalidEntry(t *testing.T) {
 				mid:      "testmid",
 			},
 			want: &auditevent.AuditEvent{
-				Type: common.ActionLoginIdentifier,
+				Type:     common.ActionLoginIdentifier,
+				LoggedAt: expectedts,
 				Source: auditevent.EventSource{
 					Type:  "IP",
 					Value: "unknown",
@@ -196,7 +208,7 @@ func Test_processCertificateInvalidEntry(t *testing.T) {
 
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
-			processCertificateInvalidEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, w)
+			processCertificateInvalidEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, w)
 
 			compareAuditLogs(t, tt.want, enc.evt)
 
