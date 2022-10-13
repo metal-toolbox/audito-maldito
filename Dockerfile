@@ -15,6 +15,10 @@ RUN go build -o audito-maldito
 # Not using distroless nor scratch because we need the systemd shared libraries
 FROM registry.fedoraproject.org/fedora-minimal:38
 
+# NOTE(jaosorior): Yes, we need to be the root user for this case.
+# We need access to the journal's privileged log entries and the audit log in the future.
+USER 0
+
 COPY --from=builder /go/src/audito-maldito/audito-maldito /usr/bin/audito-maldito
 
 ENTRYPOINT [ "/usr/bin/audito-maldito" ]
