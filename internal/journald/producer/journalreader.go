@@ -11,6 +11,7 @@ import (
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
 type journalEntryImpl struct {
@@ -44,10 +45,7 @@ func newJournalReader(bootID string) JournalReader {
 	j.FlushMatches()
 
 	// NOTE(jaosorior): This only works for Flatcar
-	matchSSH := sdjournal.Match{
-		Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_SLICE,
-		Value: "system-sshd.slice",
-	}
+	matchSSH := getDistroSpecificMatch()
 
 	if err := j.AddMatch(matchSSH.String()); err != nil {
 		log.Fatal(fmt.Errorf("failed to add match: %w", err))
@@ -111,4 +109,28 @@ func (je *journalEntryImpl) GetTimeStamp() uint64 {
 func (je *journalEntryImpl) GetMessage() (string, bool) {
 	msg, ok := je.entry.Fields[sdjournal.SD_JOURNAL_FIELD_MESSAGE]
 	return msg, ok
+}
+
+func getDistroSpecificMatch() sdjournal.Match {
+	distro := util.Distro()
+
+	log.Printf("Trying to match SSH logs for distro %s\n", distro)
+
+	switch distro {
+	case util.DistroFlatcar:
+		return sdjournal.Match{
+			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_SLICE,
+			Value: "system-sshd.slice",
+		}
+	case util.DistroUbuntu:
+		return sdjournal.Match{
+			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
+			Value: "ssh.service",
+		}
+	default:
+		return sdjournal.Match{
+			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
+			Value: "sshd.service",
+		}
+	}
 }
