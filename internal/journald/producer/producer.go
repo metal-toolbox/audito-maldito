@@ -11,7 +11,6 @@ import (
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
@@ -19,62 +18,10 @@ var (
 	defaultSleep = 10 * time.Millisecond
 )
 
-func initJournalReader(bootID string) *sdjournal.Journal {
-	j, err := sdjournal.NewJournal()
-
-	if bootID == "" {
-		var err error
-		bootID, err = j.GetBootID()
-		if err != nil {
-			log.Fatal(fmt.Errorf("failed to get boot id: %w", err))
-		}
-	}
-
-	if err != nil {
-		log.Fatal(fmt.Errorf("failed to open journal: %w", err))
-	}
-
-	if j == nil {
-		log.Fatal(fmt.Errorf("journal is nil"))
-	}
-
-	// Initialize/restart the journal reader.
-	j.FlushMatches()
-
-	// NOTE(jaosorior): This only works for Flatcar
-	matchSSH := sdjournal.Match{
-		Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_SLICE,
-		Value: "system-sshd.slice",
-	}
-
-	j.AddMatch(matchSSH.String())
-
-	log.Printf("Boot-ID: %s\n", bootID)
-
-	// NOTE(jaosorior): We only care about the current boot
-	matchBootID := sdjournal.Match{
-		Field: sdjournal.SD_JOURNAL_FIELD_BOOT_ID,
-		Value: bootID,
-	}
-
-	j.AddMatch(matchBootID.String())
-
-	// Attempt to get the last read position from the journal
-	lastRead := common.GetLastRead()
-	if lastRead != 0 {
-		log.Printf("journaldConsumer: Last read position: %d", lastRead)
-		j.SeekRealtimeUsec(lastRead + 1)
-	} else {
-		log.Printf("journaldConsumer: No last read position found, reading from the beginning")
-	}
-
-	return j
-}
-
 func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
 	defer wg.Done()
 
-	j := initJournalReader(bootID)
+	j := newJournalReader(bootID)
 	defer j.Close()
 
 	for {
@@ -87,7 +34,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			if errors.Is(nextErr, io.EOF) {
 				if r := j.Wait(defaultSleep); r < 0 {
 					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
-					j = initJournalReader(bootID)
+					j = newJournalReader(bootID)
 					continue
 				}
 				return
@@ -98,7 +45,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			if c == 0 {
 				if r := j.Wait(defaultSleep); r < 0 {
 					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
-					j = initJournalReader(bootID)
+					j = newJournalReader(bootID)
 				}
 				continue
 			}
@@ -109,14 +56,14 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				continue
 			}
 
-			entryMsg, hasMessage := entry.Fields[sdjournal.SD_JOURNAL_FIELD_MESSAGE]
+			entryMsg, hasMessage := entry.GetMessage()
 			if !hasMessage {
 				log.Println("journaldConsumer: Got entry with no MESSAGE")
 				continue
 			}
 
 			lg := &types.LogEntry{
-				Timestamp: entry.RealtimeTimestamp,
+				Timestamp: entry.GetTimeStamp(),
 				Message:   entryMsg,
 			}
 
