@@ -49,7 +49,9 @@ func newJournalReader(bootID string) JournalReader {
 		Value: "system-sshd.slice",
 	}
 
-	j.AddMatch(matchSSH.String())
+	if err := j.AddMatch(matchSSH.String()); err != nil {
+		log.Fatal(fmt.Errorf("failed to add match: %w", err))
+	}
 
 	log.Printf("Boot-ID: %s\n", bootID)
 
@@ -59,13 +61,17 @@ func newJournalReader(bootID string) JournalReader {
 		Value: bootID,
 	}
 
-	j.AddMatch(matchBootID.String())
+	if err := j.AddMatch(matchBootID.String()); err != nil {
+		log.Fatal(fmt.Errorf("failed to add match: %w", err))
+	}
 
 	// Attempt to get the last read position from the journal
 	lastRead := common.GetLastRead()
 	if lastRead != 0 {
 		log.Printf("journaldConsumer: Last read position: %d", lastRead)
-		j.SeekRealtimeUsec(lastRead + 1)
+		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
+			log.Printf("failed to seek to last read position: %s. Attempting to continue anyway.", err)
+		}
 	} else {
 		log.Printf("journaldConsumer: No last read position found, reading from the beginning")
 	}
