@@ -119,9 +119,9 @@ func JournaldConsumer(
 
 			// This is an message that identifies a login
 			if strings.HasPrefix(entry.Message, "Accepted publickey") {
-				processAcceptPublicKeyEntry(entry.Message, mid, nodename, ts, w)
+				processAcceptPublicKeyEntry(entry.Message, nodename, mid, ts, w)
 			} else if strings.HasPrefix(entry.Message, "Certificate invalid") {
-				processCertificateInvalidEntry(entry.Message, mid, nodename, ts, w)
+				processCertificateInvalidEntry(entry.Message, nodename, mid, ts, w)
 			}
 
 			// Even if there was no match, we have already "processed" this
