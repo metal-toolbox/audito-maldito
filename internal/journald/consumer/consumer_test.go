@@ -129,3 +129,61 @@ func Test_processAcceptPublicKeyEntry(t *testing.T) {
 		})
 	}
 }
+
+func Test_processCertificateInvalidEntry(t *testing.T) {
+	type args struct {
+		logentry string
+		nodename string
+		mid      string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *auditevent.AuditEvent
+	}{
+		{
+			name: "Entry with reason",
+			args: args{
+				logentry: "Certificate invalid: expired",
+				nodename: "testnode",
+				mid:      "testmid",
+			},
+			want: &auditevent.AuditEvent{
+				Type: common.ActionLoginIdentifier,
+				Source: auditevent.EventSource{
+					Type:  "IP",
+					Value: "unknown",
+					Extra: map[string]any{
+						"port": "unknown",
+					},
+				},
+				Outcome: auditevent.OutcomeFailed,
+				Subjects: map[string]string{
+					"loggedAs": "unknown",
+					"userID":   common.UnknownUser,
+				},
+				Target: map[string]string{
+					"host":       "testnode",
+					"machine-id": "testmid",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enc := &testAuditEventEncoder{}
+			w := auditevent.NewAuditEventWriter(enc)
+			processCertificateInvalidEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, w)
+
+			assert.Equal(t, tt.want.Type, enc.evt.Type)
+			assert.Equal(t, tt.want.Source.Type, enc.evt.Source.Type)
+			assert.Equal(t, tt.want.Source.Value, enc.evt.Source.Value)
+			assert.Equal(t, tt.want.Source.Extra, enc.evt.Source.Extra)
+			assert.Equal(t, tt.want.Outcome, enc.evt.Outcome)
+			assert.Equal(t, tt.want.Subjects, enc.evt.Subjects)
+			assert.Equal(t, tt.want.Target, enc.evt.Target)
+
+			// TODO(jaosorior): Add assertions for ExtraData
+		})
+	}
+}

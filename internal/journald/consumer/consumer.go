@@ -103,6 +103,8 @@ func JournaldConsumer(ctx context.Context, wg *sync.WaitGroup, journaldChan <-ch
 			// This is an message that identifies a login
 			if strings.HasPrefix(entry.Message, "Accepted publickey") {
 				processAcceptPublicKeyEntry(entry.Message, mid, nodename, w)
+			} else if strings.HasPrefix(entry.Message, "Certificate invalid") {
+				processCertificateInvalidEntry(entry.Message, mid, nodename, w)
 			}
 
 			// Even if there was no match, we have already "processed" this
@@ -186,4 +188,63 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, w *auditevent.E
 	}
 
 	w.Write(evt)
+}
+
+func getCertificateInvalidReason(logentry string) string {
+	prefix := "Certificate invalid: "
+	prefixLen := len(prefix)
+
+	if len(logentry) <= prefixLen {
+		return "unknown reason"
+	}
+
+	return logentry[prefixLen:]
+}
+
+func processCertificateInvalidEntry(logentry, nodename, mid string, w *auditevent.EventWriter) {
+	reason := getCertificateInvalidReason(logentry)
+
+	// TODO(jaosorior): Overwrite timestamp with the one from the log entry
+	// TODO(jaosorior): Figure out smart way of getting the source
+	//                  For flatcar, we could get it from the CGROUP.... not sure for Ubuntu though
+	// e.g.
+	//   _SYSTEMD_CGROUP=/system.slice/system-sshd.slice/sshd@56-1.0.7.5:22-7.8.36.9:50101.service
+	//   _SYSTEMD_UNIT=sshd@56-1.0.7.5:22-7.8.36.9:50101.service
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: "unknown",
+			Extra: map[string]any{
+				"port": "unknown",
+			},
+		},
+		auditevent.OutcomeFailed,
+		map[string]string{
+			"loggedAs": common.UnknownUser,
+			"userID":   common.UnknownUser,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       nodename,
+		"machine-id": mid,
+	})
+
+	ed, ederr := extraDataForInvalidCert(reason)
+	if ederr != nil {
+		log.Println("journaldConsumer: Failed to create extra data for invalid cert login event")
+	} else {
+		evt = evt.WithData(ed)
+	}
+
+	w.Write(evt)
+}
+
+func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
+	extraData := map[string]string{
+		"reason": reason,
+	}
+	raw, err := json.Marshal(extraData)
+	rawmsg := json.RawMessage(raw)
+	return &rawmsg, err
 }
