@@ -37,6 +37,9 @@ var (
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
 	loginRE  = regexp.MustCompile(`Accepted publickey for (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
 	certIDRE = regexp.MustCompile(`ID (?P<UserID>\S+)\s+\(serial (?P<Serial>\d+)\)\s+(?P<CA>.+)`)
+	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
+	notInAllowUsersRE = regexp.MustCompile(`User (?P<Username>\w+) from (?P<Source>\S+) not allowed because not listed in AllowUsers`)
+	invalidUserRE     = regexp.MustCompile(`Invalid user (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+)`)
 )
 
 func extraDataWithoutCA(alg, keySum string) (*json.RawMessage, error) {
@@ -117,18 +120,33 @@ func JournaldConsumer(
 			usec := entry.Timestamp
 			ts := time.UnixMicro(int64(usec))
 
-			// This is an message that identifies a login
-			if strings.HasPrefix(entry.Message, "Accepted publickey") {
-				processAcceptPublicKeyEntry(entry.Message, nodename, mid, ts, w)
-			} else if strings.HasPrefix(entry.Message, "Certificate invalid") {
-				processCertificateInvalidEntry(entry.Message, nodename, mid, ts, w)
-			}
+			processEntry(entry.Message, nodename, mid, ts, w)
 
 			// Even if there was no match, we have already "processed" this
 			// log entry, so we should reflect it as such.
 			atomic.StoreUint64(&currentRead, entry.Timestamp)
 		}
 	}
+}
+
+func processEntry(
+	entry string,
+	nodename, mid string,
+	ts time.Time,
+	w *auditevent.EventWriter,
+) {
+	switch {
+	case strings.HasPrefix(entry, "Accepted publickey"):
+		processAcceptPublicKeyEntry(entry, nodename, mid, ts, w)
+	case strings.HasPrefix(entry, "Certificate invalid"):
+		processCertificateInvalidEntry(entry, nodename, mid, ts, w)
+	case strings.HasSuffix(entry, "not allowed because not listed in AllowUsers"):
+		processNotInAllowUsersEntry(entry, nodename, mid, ts, w)
+	case strings.HasPrefix(entry, "Invalid user"):
+		processInvalidUserEntry(entry, nodename, mid, ts, w)
+	}
+
+	// TODO(jaosorior): Should we log the entry if it didn't match?
 }
 
 func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) {
@@ -282,4 +300,78 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	raw, err := json.Marshal(extraData)
 	rawmsg := json.RawMessage(raw)
 	return &rawmsg, err
+}
+
+func processNotInAllowUsersEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+	matches := notInAllowUsersRE.FindStringSubmatch(logentry)
+	if matches == nil {
+		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
+		return
+	}
+
+	usrIdx := notInAllowUsersRE.SubexpIndex(idxLoginUserName)
+	sourceIdx := notInAllowUsersRE.SubexpIndex(idxLoginSource)
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: matches[sourceIdx],
+		},
+		auditevent.OutcomeFailed,
+		map[string]string{
+			"loggedAs": matches[usrIdx],
+			"userID":   common.UnknownUser,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       nodename,
+		"machine-id": mid,
+	})
+
+	evt.LoggedAt = when
+	if err := w.Write(evt); err != nil {
+		// NOTE(jaosorior): Not being able to write audit events
+		// merits us panicking here.
+		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+	}
+}
+
+func processInvalidUserEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+	matches := invalidUserRE.FindStringSubmatch(logentry)
+	if matches == nil {
+		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
+		return
+	}
+
+	usrIdx := invalidUserRE.SubexpIndex(idxLoginUserName)
+	sourceIdx := invalidUserRE.SubexpIndex(idxLoginSource)
+	portIdx := invalidUserRE.SubexpIndex(idxLoginPort)
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: matches[sourceIdx],
+			Extra: map[string]any{
+				"port": matches[portIdx],
+			},
+		},
+		auditevent.OutcomeFailed,
+		map[string]string{
+			"loggedAs": matches[usrIdx],
+			"userID":   common.UnknownUser,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       nodename,
+		"machine-id": mid,
+	})
+
+	evt.LoggedAt = when
+	if err := w.Write(evt); err != nil {
+		// NOTE(jaosorior): Not being able to write audit events
+		// merits us panicking here.
+		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+	}
 }
