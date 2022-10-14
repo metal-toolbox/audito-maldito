@@ -6,15 +6,22 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
-var defaultSleep = 10 * time.Millisecond
+var defaultSleep = 1 * time.Second
+
+const (
+	onlyUserReadable = 0o600
+)
 
 func resetJournal(j JournalReader, bootID string) JournalReader {
 	if err := j.Close(); err != nil {
@@ -23,11 +30,37 @@ func resetJournal(j JournalReader, bootID string) JournalReader {
 	return newJournalReader(bootID)
 }
 
+// writes the last read timestamp to a file
+// Note we don't fail if we can't write the file nor read the directory
+// as we intend to go through the defer statements and exit.
+// If this fails, we will just start reading from the beginning of the journal.
+func flushLastRead(lastReadToFlush *uint64) {
+	lastRead := atomic.LoadUint64(lastReadToFlush)
+
+	log.Printf("journaldConsumer: Flushing last read timestamp %d", lastRead)
+
+	if err := common.EnsureFlushDirectory(); err != nil {
+		log.Printf("journaldConsumer: Failed to ensure flush directory: %v", err)
+		return
+	}
+
+	// The WriteFile function ensures the file will only contain
+	// *exactly* what we write to it by either creating a new file,
+	// or by truncating an existing file.
+	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), onlyUserReadable)
+	if err != nil {
+		log.Printf("journaldConsumer: failed to write flush file: %s", err)
+	}
+}
+
 func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
+	var currentRead uint64
 	defer wg.Done()
 
 	j := newJournalReader(bootID)
 	defer j.Close()
+
+	defer flushLastRead(&currentRead)
 
 	for {
 		select {
@@ -39,6 +72,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			if nextErr != nil {
 				if errors.Is(nextErr, io.EOF) {
 					if r := j.Wait(defaultSleep); r < 0 {
+						flushLastRead(&currentRead)
 						log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
 						j = resetJournal(j, bootID)
 					}
@@ -57,6 +91,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 
 			if c == 0 {
 				if r := j.Wait(defaultSleep); r < 0 {
+					flushLastRead(&currentRead)
 					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
 					j = resetJournal(j, bootID)
 				}
@@ -82,6 +117,9 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 
 			select {
 			case journaldChan <- lg:
+				// Even if there was no match, we have already "processed" this
+				// log entry, so we should reflect it as such.
+				atomic.StoreUint64(&currentRead, lg.Timestamp)
 			case <-ctx.Done():
 				log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
 				return

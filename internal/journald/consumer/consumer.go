@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
@@ -27,10 +25,6 @@ const (
 	idxCertUserID    = "UserID"
 	idxCertSerial    = "Serial"
 	idxCertCA        = "CA"
-)
-
-const (
-	onlyUserReadable = 0o600
 )
 
 var (
@@ -64,29 +58,6 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 	return &rawmsg, err
 }
 
-// writes the last read timestamp to a file
-// Note we don't fail if we can't write the file nor read the directory
-// as we intend to go through the defer statements and exit.
-// If this fails, we will just start reading from the beginning of the journal.
-func flushLastRead(lastReadToFlush *uint64) {
-	lastRead := atomic.LoadUint64(lastReadToFlush)
-
-	log.Printf("journaldConsumer: Flushing last read timestamp %d", lastRead)
-
-	if err := common.EnsureFlushDirectory(); err != nil {
-		log.Printf("journaldConsumer: Failed to ensure flush directory: %v", err)
-		return
-	}
-
-	// The WriteFile function ensures the file will only contain
-	// *exactly* what we write to it by either creating a new file,
-	// or by truncating an existing file.
-	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), onlyUserReadable)
-	if err != nil {
-		log.Printf("journaldConsumer: failed to write flush file: %s", err)
-	}
-}
-
 // JournaldConsumer is the main loop that consumes journald log entries.
 func JournaldConsumer(
 	ctx context.Context,
@@ -94,8 +65,6 @@ func JournaldConsumer(
 	journaldChan <-chan *types.LogEntry,
 	w *auditevent.EventWriter,
 ) {
-	var currentRead uint64
-
 	mid, miderr := common.GetMachineID()
 	if miderr != nil {
 		log.Fatal(fmt.Errorf("failed to get machine id: %w", miderr))
@@ -108,8 +77,6 @@ func JournaldConsumer(
 
 	defer wg.Done()
 
-	defer flushLastRead(&currentRead)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -121,10 +88,6 @@ func JournaldConsumer(
 			ts := time.UnixMicro(int64(usec))
 
 			processEntry(entry.Message, nodename, mid, ts, w)
-
-			// Even if there was no match, we have already "processed" this
-			// log entry, so we should reflect it as such.
-			atomic.StoreUint64(&currentRead, entry.Timestamp)
 		}
 	}
 }
