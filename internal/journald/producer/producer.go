@@ -36,17 +36,19 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			return
 		default:
 			c, nextErr := j.Next()
-			if errors.Is(nextErr, io.EOF) {
-				if r := j.Wait(defaultSleep); r < 0 {
-					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
-					j = resetJournal(j, bootID)
+			if nextErr != nil {
+				if errors.Is(nextErr, io.EOF) {
+					if r := j.Wait(defaultSleep); r < 0 {
+						log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
+						j = resetJournal(j, bootID)
+					}
 					continue
 				}
-				return
-			} else if nextErr != nil {
-				if err := j.Close(); err != nil {
-					log.Printf("journaldProducer: failed to close journal: %v", err)
+
+				if closeErr := j.Close(); closeErr != nil {
+					log.Printf("journaldProducer: failed to close journal: %v", closeErr)
 				}
+
 				// TODO(jaosorior): Figure out a way to not panic here.
 				// Maybe closing the journaldChan?
 				//nolint:gocritic // We call Close above
