@@ -18,10 +18,6 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
-const (
-	journalEntryBufferSize = 1000
-)
-
 func mainWithExitCode() int {
 	var bootID string
 	var auditlogpath string
@@ -49,7 +45,7 @@ func mainWithExitCode() int {
 
 	w := auditevent.NewDefaultAuditEventWriter(auf)
 
-	journaldChan := make(chan *types.LogEntry, journalEntryBufferSize)
+	journaldChan := make(chan *types.LogEntry)
 	log.Println("Starting workers")
 
 	wg.Add(1)
