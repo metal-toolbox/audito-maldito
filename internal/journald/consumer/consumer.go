@@ -295,6 +295,7 @@ func processCertificateInvalidEntry(logentry, nodename, mid string, when time.Ti
 
 func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	extraData := map[string]string{
+		"error":  "certificate invalid",
 		"reason": reason,
 	}
 	raw, err := json.Marshal(extraData)
