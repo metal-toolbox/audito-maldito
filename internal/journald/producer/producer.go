@@ -68,12 +68,14 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
 			return
 		default:
-			c, nextErr := j.Next()
+			isNewFile, nextErr := j.Next()
 			if nextErr != nil {
 				if errors.Is(nextErr, io.EOF) {
 					if r := j.Wait(defaultSleep); r < 0 {
 						flushLastRead(&currentRead)
-						log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
+						log.Printf("journaldProducer: wait failed after calling next, "+
+							"reinitializing. error-code: %d", r)
+						time.Sleep(defaultSleep)
 						j = resetJournal(j, bootID)
 					}
 					continue
@@ -89,10 +91,12 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr))
 			}
 
-			if c == 0 {
+			if isNewFile == 0 {
 				if r := j.Wait(defaultSleep); r < 0 {
 					flushLastRead(&currentRead)
-					log.Printf("journaldProducer: journal wait returned an error, reinitializing. error-code: %d", r)
+					log.Printf("journaldProducer: wait failed after checking for new journal file, "+
+						"reinitializing. error-code: %d", r)
+					time.Sleep(defaultSleep)
 					j = resetJournal(j, bootID)
 				}
 				continue
@@ -117,8 +121,9 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 
 			select {
 			case journaldChan <- lg:
-				// Even if there was no match, we have already "processed" this
-				// log entry, so we should reflect it as such.
+				// TODO: Re-evaluate last-read file saving logic.
+				//  Refer to PR 20 for details:
+				//  https://github.com/metal-toolbox/audito-maldito/pull/20
 				atomic.StoreUint64(&currentRead, lg.Timestamp)
 			case <-ctx.Done():
 				log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
