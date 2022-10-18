@@ -86,8 +86,9 @@ func JournaldConsumer(
 			// This comes from journald's RealtimeTimestamp field.
 			usec := entry.Timestamp
 			ts := time.UnixMicro(int64(usec))
+			pid := entry.PID
 
-			processEntry(entry.Message, nodename, mid, ts, w)
+			processEntry(entry.Message, nodename, mid, ts, pid, w)
 		}
 	}
 }
@@ -96,17 +97,18 @@ func processEntry(
 	entry string,
 	nodename, mid string,
 	ts time.Time,
+	pid string,
 	w *auditevent.EventWriter,
 ) {
 	switch {
 	case strings.HasPrefix(entry, "Accepted publickey"):
-		processAcceptPublicKeyEntry(entry, nodename, mid, ts, w)
+		processAcceptPublicKeyEntry(entry, nodename, mid, ts, pid, w)
 	case strings.HasPrefix(entry, "Certificate invalid"):
-		processCertificateInvalidEntry(entry, nodename, mid, ts, w)
+		processCertificateInvalidEntry(entry, nodename, mid, ts, pid, w)
 	case strings.HasSuffix(entry, "not allowed because not listed in AllowUsers"):
-		processNotInAllowUsersEntry(entry, nodename, mid, ts, w)
+		processNotInAllowUsersEntry(entry, nodename, mid, ts, pid, w)
 	case strings.HasPrefix(entry, "Invalid user"):
-		processInvalidUserEntry(entry, nodename, mid, ts, w)
+		processInvalidUserEntry(entry, nodename, mid, ts, pid, w)
 	}
 
 	// TODO(jaosorior): Should we log the entry if it didn't match?
@@ -122,7 +124,14 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+func processAcceptPublicKeyEntry(
+	logentry string,
+	nodename string,
+	mid string,
+	when time.Time,
+	pid string,
+	w *auditevent.EventWriter,
+) {
 	matches := loginRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
@@ -147,6 +156,7 @@ func processAcceptPublicKeyEntry(logentry, nodename, mid string, when time.Time,
 		auditevent.OutcomeSucceeded,
 		map[string]string{
 			"loggedAs": matches[usrIdx],
+			"pid":      pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
@@ -212,7 +222,14 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+func processCertificateInvalidEntry(
+	logentry string,
+	nodename string,
+	mid string,
+	when time.Time,
+	pid string,
+	w *auditevent.EventWriter,
+) {
 	reason := getCertificateInvalidReason(logentry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
@@ -233,6 +250,7 @@ func processCertificateInvalidEntry(logentry, nodename, mid string, when time.Ti
 		map[string]string{
 			"loggedAs": common.UnknownUser,
 			"userID":   common.UnknownUser,
+			"pid":      pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
@@ -266,7 +284,14 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+func processNotInAllowUsersEntry(
+	logentry string,
+	nodename string,
+	mid string,
+	when time.Time,
+	pid string,
+	w *auditevent.EventWriter,
+) {
 	matches := notInAllowUsersRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
@@ -286,6 +311,7 @@ func processNotInAllowUsersEntry(logentry, nodename, mid string, when time.Time,
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
+			"pid":      pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
@@ -301,7 +327,14 @@ func processNotInAllowUsersEntry(logentry, nodename, mid string, when time.Time,
 	}
 }
 
-func processInvalidUserEntry(logentry, nodename, mid string, when time.Time, w *auditevent.EventWriter) {
+func processInvalidUserEntry(
+	logentry string,
+	nodename string,
+	mid string,
+	when time.Time,
+	pid string,
+	w *auditevent.EventWriter,
+) {
 	matches := invalidUserRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
@@ -325,6 +358,7 @@ func processInvalidUserEntry(logentry, nodename, mid string, when time.Time, w *
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
+			"pid":      pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{

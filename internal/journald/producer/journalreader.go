@@ -109,6 +109,15 @@ func (je *journalEntryImpl) GetMessage() (string, bool) {
 	return msg, ok
 }
 
+func (je *journalEntryImpl) GetPID() string {
+	pid, ok := je.entry.Fields[sdjournal.SD_JOURNAL_FIELD_PID]
+	if !ok {
+		return ""
+	}
+
+	return pid
+}
+
 func getDistroSpecificMatch() sdjournal.Match {
 	distro := util.Distro()
 

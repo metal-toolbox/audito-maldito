@@ -5,6 +5,7 @@ import "time"
 type JournalEntry interface {
 	GetMessage() (string, bool)
 	GetTimeStamp() uint64
+	GetPID() string
 }
 
 type JournalReader interface {

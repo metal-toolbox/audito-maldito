@@ -46,6 +46,7 @@ func TestEntryProcessing(t *testing.T) {
 		logentry string
 		nodename string
 		mid      string
+		pid      string
 	}
 	tests := []struct {
 		name string
@@ -59,6 +60,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "Accepted publickey for core from 127.0.0.1 port 666 ssh2: ED25519-CERT SHA256:qM6MXh9sUr+*****+IAML33tDEADBEEF ID satanic@panic.com (serial 1) CA ED25519 SHA256:ThisISACAChecksum+Right?",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "1234",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -74,6 +76,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "core",
 					"userID":   "satanic@panic.com",
+					"pid":      "1234",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -89,6 +92,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "Accepted publickey for core from 127.0.0.1 port 666 ssh2: ED25519-CERT SHA256:qM6MXh9sUr+*****+IAML33tDEADBEEF",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -104,6 +108,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "core",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -118,6 +123,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "Accepted publickey for core from 127.0.0.1 port 666 ssh2: ED25519-CERT SHA256:qM6MXh9sUr+*****+IAML33tDEADBEEF and stuff",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -133,6 +139,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "core",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -146,6 +153,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "Certificate invalid: expired",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -161,6 +169,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "unknown",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -174,6 +183,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "User root from 47.28.136.9 not allowed because not listed in AllowUsers",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -186,6 +196,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "root",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -199,6 +210,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "User walrus from 47.28.136.9 not allowed because not listed in AllowUsers",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -211,6 +223,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "walrus",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -224,6 +237,7 @@ func TestEntryProcessing(t *testing.T) {
 				logentry: "Invalid user cow from 47.8.6.9 port 64433",
 				nodename: "testnode",
 				mid:      "testmid",
+				pid:      "666",
 			},
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
@@ -239,6 +253,7 @@ func TestEntryProcessing(t *testing.T) {
 				Subjects: map[string]string{
 					"loggedAs": "cow",
 					"userID":   common.UnknownUser,
+					"pid":      "666",
 				},
 				Target: map[string]string{
 					"host":       "testnode",
@@ -254,7 +269,7 @@ func TestEntryProcessing(t *testing.T) {
 
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
-			processEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, w)
+			processEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, tt.args.pid, w)
 
 			compareAuditLogs(t, tt.want, enc.evt)
 

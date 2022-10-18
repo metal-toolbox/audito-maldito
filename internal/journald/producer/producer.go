@@ -117,6 +117,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			lg := &types.LogEntry{
 				Timestamp: entry.GetTimeStamp(),
 				Message:   entryMsg,
+				PID:       entry.GetPID(),
 			}
 
 			select {

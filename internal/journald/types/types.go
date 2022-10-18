@@ -4,4 +4,5 @@ package types
 type LogEntry struct {
 	Timestamp uint64
 	Message   string
+	PID       string
 }
