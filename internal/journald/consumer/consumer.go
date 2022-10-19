@@ -100,16 +100,19 @@ func processEntry(
 	pid string,
 	w *auditevent.EventWriter,
 ) {
+	var entryFunc func(string, string, string, time.Time, string, *auditevent.EventWriter)
 	switch {
 	case strings.HasPrefix(entry, "Accepted publickey"):
-		processAcceptPublicKeyEntry(entry, nodename, mid, ts, pid, w)
+		entryFunc = processAcceptPublicKeyEntry
 	case strings.HasPrefix(entry, "Certificate invalid"):
-		processCertificateInvalidEntry(entry, nodename, mid, ts, pid, w)
+		entryFunc = processCertificateInvalidEntry
 	case strings.HasSuffix(entry, "not allowed because not listed in AllowUsers"):
-		processNotInAllowUsersEntry(entry, nodename, mid, ts, pid, w)
+		entryFunc = processNotInAllowUsersEntry
 	case strings.HasPrefix(entry, "Invalid user"):
-		processInvalidUserEntry(entry, nodename, mid, ts, pid, w)
+		entryFunc = processInvalidUserEntry
 	}
+
+	entryFunc(entry, nodename, mid, ts, pid, w)
 
 	// TODO(jaosorior): Should we log the entry if it didn't match?
 }

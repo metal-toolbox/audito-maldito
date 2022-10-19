@@ -82,22 +82,6 @@ linters:
     - usestdlibvars
     - wastedassign
     - whitespace
-    # - contextcheck
-    # - cyclop
-    # - exhaustruct
-    # - forbidigo
-    # - funlen
-    # - gochecknoglobals
-    # - interfacebloat
-    # - ireturn
-    # - logrlint
-    # - maintidx
-    # - nlreturn
-    # - nonamedreturns
-    # - testpackage
-    # - varnamelen
-    # - wrapcheck
-    # - wsl
 linters-settings:
   gomoddirectives:
     replace-allow-list:
