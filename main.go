@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -16,12 +17,12 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/journald/consumer"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/producer"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
+	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
-func mainWithExitCode() int {
+func mainWithErr() error {
 	var bootID string
 	var auditlogpath string
-	var wg sync.WaitGroup
 
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
 	flag.StringVar(&bootID, "boot-id", "", "Boot-ID to read from the journal")
@@ -32,15 +33,18 @@ func mainWithExitCode() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	distro, err := util.Distro()
+	if err != nil {
+		return fmt.Errorf("fatal: failed to get os distro type: %v", err)
+	}
+
 	if err := common.EnsureFlushDirectory(); err != nil {
-		log.Printf("Error: failed to ensure flush directory: %v", err)
-		return 1
+		return fmt.Errorf("fatal: failed to ensure flush directory: %v", err)
 	}
 
 	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditlogpath)
 	if auditfileerr != nil {
-		log.Printf("Error: failed to open audit log file: %v", auditfileerr)
-		return 1
+		return fmt.Errorf("fatal: failed to open audit log file: %v", auditfileerr)
 	}
 
 	w := auditevent.NewDefaultAuditEventWriter(auf)
@@ -48,17 +52,28 @@ func mainWithExitCode() int {
 	journaldChan := make(chan *types.LogEntry)
 	log.Println("Starting workers")
 
-	wg.Add(1)
-	go producer.JournaldProducer(ctx, &wg, journaldChan, bootID)
+	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	go consumer.JournaldConsumer(ctx, &wg, journaldChan, w)
+	go producer.JournaldProducer(ctx, producer.JournaldProducerConfig{
+		WG:      wg,
+		Entries: journaldChan,
+		BootID:  bootID,
+		Distro:  distro,
+	})
+
+	wg.Add(1)
+	go consumer.JournaldConsumer(ctx, wg, journaldChan, w)
+
 	wg.Wait()
 
 	log.Println("All workers finished")
-	return 0
+	return nil
 }
 
 func main() {
-	os.Exit(mainWithExitCode())
+	err := mainWithErr()
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

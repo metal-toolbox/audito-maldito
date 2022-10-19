@@ -54,7 +54,7 @@ func Test_GetLastRead(t *testing.T) {
 			_, err = f.WriteString(tt.args.contents)
 			assert.NoError(t, err)
 
-			if got := doGetLastRead(path); got != tt.want {
+			if got, _ := doGetLastRead(path); got != tt.want {
 				t.Errorf("doGetLastRead() = %v, want %v", got, tt.want)
 			}
 		})

@@ -19,7 +19,7 @@ func Test_doGetDistro(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want DistroType
 	}{
 		{
 			name: "flatcar",
@@ -117,7 +117,10 @@ VERSION="1.0"
 				assert.NoError(t, os.WriteFile(path, []byte(tt.args.osReleaseContents), 0o600))
 			}
 
-			if got := doGetDistro(path); got != tt.want {
+			got, err := doGetDistro(path)
+			assert.NoError(t, err)
+
+			if got != tt.want {
 				t.Errorf("doGetDistro() = %v, want %v", got, tt.want)
 			}
 		})

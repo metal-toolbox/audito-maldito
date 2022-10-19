@@ -15,6 +15,7 @@ import (
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
+	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
 var defaultSleep = 1 * time.Second
@@ -23,11 +24,12 @@ const (
 	onlyUserReadable = 0o600
 )
 
-func resetJournal(j JournalReader, bootID string) JournalReader {
+func resetJournal(j JournalReader, bootID string, distro util.DistroType) (JournalReader, error) {
 	if err := j.Close(); err != nil {
 		log.Printf("journaldProducer: failed to close journal: %v", err)
 	}
-	return newJournalReader(bootID)
+
+	return newJournalReader(bootID, distro) //nolint
 }
 
 // writes the last read timestamp to a file
@@ -53,11 +55,22 @@ func flushLastRead(lastReadToFlush *uint64) {
 	}
 }
 
-func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan<- *types.LogEntry, bootID string) {
-	var currentRead uint64
-	defer wg.Done()
+type JournaldProducerConfig struct {
+	WG      *sync.WaitGroup
+	Entries chan<- *types.LogEntry
+	BootID  string
+	Distro  util.DistroType
+}
 
-	j := newJournalReader(bootID)
+//nolint
+func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
+	var currentRead uint64
+	defer config.WG.Done()
+
+	j, err := newJournalReader(config.BootID, config.Distro)
+	if err != nil {
+		log.Fatalln(err) //nolint
+	}
 	defer j.Close()
 
 	defer flushLastRead(&currentRead)
@@ -76,7 +89,11 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 						log.Printf("journaldProducer: wait failed after calling next, "+
 							"reinitializing. error-code: %d", r)
 						time.Sleep(defaultSleep)
-						j = resetJournal(j, bootID)
+
+						j, err = resetJournal(j, config.BootID, config.Distro)
+						if err != nil {
+							log.Fatalf("failed to reset journal after next failed: %s", err) //nolint
+						}
 					}
 					continue
 				}
@@ -88,7 +105,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 				// TODO(jaosorior): Figure out a way to not panic here.
 				// Maybe closing the journaldChan?
 				//nolint:gocritic // We call Close above
-				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr))
+				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr)) //nolint
 			}
 
 			if isNewFile == 0 {
@@ -97,7 +114,11 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 					log.Printf("journaldProducer: wait failed after checking for new journal file, "+
 						"reinitializing. error-code: %d", r)
 					time.Sleep(defaultSleep)
-					j = resetJournal(j, bootID)
+
+					j, err = resetJournal(j, config.BootID, config.Distro)
+					if err != nil {
+						log.Fatalf("failed to reset journal after wait failed: %s", err) //nolint
+					}
 				}
 				continue
 			}
@@ -121,7 +142,7 @@ func JournaldProducer(ctx context.Context, wg *sync.WaitGroup, journaldChan chan
 			}
 
 			select {
-			case journaldChan <- lg:
+			case config.Entries <- lg:
 				// TODO: Re-evaluate last-read file saving logic.
 				//  Refer to PR 20 for details:
 				//  https://github.com/metal-toolbox/audito-maldito/pull/20

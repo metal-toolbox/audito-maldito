@@ -4,6 +4,7 @@
 package producer
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -22,34 +23,40 @@ type journalReaderImpl struct {
 	journal *sdjournal.Journal
 }
 
-func newJournalReader(bootID string) JournalReader {
+//nolint
+func newJournalReader(bootID string, distro util.DistroType) (JournalReader, error) {
 	j, err := sdjournal.NewJournal()
 	if err != nil {
-		log.Fatal(fmt.Errorf("failed to open journal: %w", err))
+		return nil, fmt.Errorf("failed to open journal: %w", err)
 	}
 
 	if j == nil {
-		log.Fatal(fmt.Errorf("journal is nil"))
+		return nil, errors.New("journal is nil")
 	}
 
 	if bootID == "" {
-		var err error
 		bootID, err = j.GetBootID()
 		if err != nil {
-			log.Fatal(fmt.Errorf("failed to get boot id from journal: %w", err))
+			_ = j.Close()
+			return nil, fmt.Errorf("failed to get boot id from journal: %w", err)
 		}
 	}
 
 	// Initialize/restart the journal reader.
 	j.FlushMatches()
 
-	matchSSH := getDistroSpecificMatch()
-
-	if err := j.AddMatch(matchSSH.String()); err != nil {
-		log.Fatal(fmt.Errorf("failed to add ssh match: %w", err))
+	matchSSH, err := getDistroSpecificMatch(distro)
+	if err != nil {
+		_ = j.Close()
+		return nil, fmt.Errorf("failed to get journal ssh match: %w", err)
 	}
 
-	log.Printf("got boot id: %s", bootID)
+	if err := j.AddMatch(matchSSH.String()); err != nil {
+		_ = j.Close()
+		return nil, fmt.Errorf("failed to add ssh match: %w", err)
+	}
+
+	log.Printf("distro: '%s' | boot id: '%s'", distro, bootID)
 
 	// NOTE(jaosorior): We only care about the current boot
 	matchBootID := sdjournal.Match{
@@ -58,23 +65,26 @@ func newJournalReader(bootID string) JournalReader {
 	}
 
 	if err := j.AddMatch(matchBootID.String()); err != nil {
-		log.Fatal(fmt.Errorf("failed to add boot id match: %w", err))
+		_ = j.Close()
+		return nil, fmt.Errorf("failed to add boot id match: %w", err)
 	}
 
-	// Attempt to get the last read position from the journal
-	lastRead := common.GetLastRead()
-	if lastRead != 0 {
+	// Attempt to get the last read position from the journal.
+	lastRead, reason := common.GetLastRead()
+	if lastRead == 0 {
+		log.Printf("journaldConsumer: No last read position found, "+
+			"reading from the beginning (reason: '%s')", reason)
+	} else {
 		log.Printf("journaldConsumer: Last read position: %d", lastRead)
 		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
-			log.Printf("failed to seek to last read position: %s. Attempting to continue anyway.", err)
+			log.Printf("journaldConsumer: failed to seek to last read position, "+
+				"attempting to continue anyway (err: '%s')", err)
 		}
-	} else {
-		log.Printf("journaldConsumer: No last read position found, reading from the beginning")
 	}
 
 	return &journalReaderImpl{
 		journal: j,
-	}
+	}, nil
 }
 
 func (jr *journalReaderImpl) Next() (uint64, error) {
@@ -118,26 +128,19 @@ func (je *journalEntryImpl) GetPID() string {
 	return pid
 }
 
-func getDistroSpecificMatch() sdjournal.Match {
-	distro := util.Distro()
-
-	log.Printf("Trying to match SSH logs for distro %s\n", distro)
-
+func getDistroSpecificMatch(distro util.DistroType) (sdjournal.Match, error) {
 	switch distro {
 	case util.DistroFlatcar:
 		return sdjournal.Match{
 			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_SLICE,
 			Value: "system-sshd.slice",
-		}
+		}, nil
 	case util.DistroUbuntu:
 		return sdjournal.Match{
 			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
 			Value: "ssh.service",
-		}
+		}, nil
 	default:
-		return sdjournal.Match{
-			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
-			Value: "sshd.service",
-		}
+		return sdjournal.Match{}, fmt.Errorf("unsupported os distro: '%s'", distro)
 	}
 }

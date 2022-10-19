@@ -2,28 +2,31 @@ package util
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"regexp"
 )
 
 const (
-	DistroUnknown = "unknown"
-	DistroFlatcar = "flatcar"
-	DistroUbuntu  = "ubuntu"
+	DistroUnknown DistroType = "unknown"
+	DistroFlatcar DistroType = "flatcar"
+	DistroUbuntu  DistroType = "ubuntu"
 )
+
+type DistroType string
 
 const (
 	osReleasePath = "/etc/os-release"
 )
 
-func Distro() string {
+func Distro() (DistroType, error) {
 	return doGetDistro(osReleasePath)
 }
 
-func doGetDistro(path string) string {
+func doGetDistro(path string) (DistroType, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return DistroUnknown
+		return DistroUnknown, err
 	}
 	defer f.Close()
 
@@ -33,8 +36,9 @@ func doGetDistro(path string) string {
 		matches := re.FindStringSubmatch(scanner.Text())
 		//nolint:gomnd // we only have 2 matches
 		if len(matches) == 2 {
-			return matches[1]
+			return DistroType(matches[1]), nil
 		}
 	}
-	return DistroUnknown
+
+	return DistroUnknown, errors.New("failed to find id field in target file")
 }
