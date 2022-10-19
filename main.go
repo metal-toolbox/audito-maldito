@@ -35,16 +35,16 @@ func mainWithErr() error {
 
 	distro, err := util.Distro()
 	if err != nil {
-		return fmt.Errorf("fatal: failed to get os distro type: %v", err)
+		return fmt.Errorf("fatal: failed to get os distro type: %w", err)
 	}
 
 	if err := common.EnsureFlushDirectory(); err != nil {
-		return fmt.Errorf("fatal: failed to ensure flush directory: %v", err)
+		return fmt.Errorf("fatal: failed to ensure flush directory: %w", err)
 	}
 
 	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditlogpath)
 	if auditfileerr != nil {
-		return fmt.Errorf("fatal: failed to open audit log file: %v", auditfileerr)
+		return fmt.Errorf("fatal: failed to open audit log file: %w", auditfileerr)
 	}
 
 	w := auditevent.NewDefaultAuditEventWriter(auf)
@@ -68,6 +68,7 @@ func mainWithErr() error {
 	wg.Wait()
 
 	log.Println("All workers finished")
+
 	return nil
 }
 

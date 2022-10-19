@@ -112,7 +112,9 @@ func processEntry(
 		entryFunc = processInvalidUserEntry
 	}
 
-	entryFunc(entry, nodename, mid, ts, pid, w)
+	if entryFunc != nil {
+		entryFunc(entry, nodename, mid, ts, pid, w)
+	}
 
 	// TODO(jaosorior): Should we log the entry if it didn't match?
 }
