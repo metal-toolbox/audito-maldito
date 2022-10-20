@@ -1,6 +1,8 @@
 package util
 
 import (
+	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,6 +22,7 @@ func Test_doGetDistro(t *testing.T) {
 		name string
 		args args
 		want DistroType
+		err  error
 	}{
 		{
 			name: "flatcar",
@@ -97,6 +100,7 @@ VERSION="1.0"
 `,
 			},
 			want: "unknown",
+			err:  errNoIDFieldInFile,
 		},
 		{
 			name: "os-release missing",
@@ -104,6 +108,7 @@ VERSION="1.0"
 				osReleaseContents: "",
 			},
 			want: "unknown",
+			err:  os.ErrNotExist,
 		},
 	}
 	for _, tt := range tests {
@@ -112,12 +117,17 @@ VERSION="1.0"
 			t.Parallel()
 
 			path := filepath.Join(tmpdir, tt.name)
+			log.Printf("path: '%s'", path)
 
 			if tt.args.osReleaseContents != "" {
 				assert.NoError(t, os.WriteFile(path, []byte(tt.args.osReleaseContents), 0o600))
 			}
 
 			got, err := doGetDistro(path)
+			if tt.err != nil && errors.Is(err, tt.err) {
+				return
+			}
+
 			assert.NoError(t, err)
 
 			if got != tt.want {

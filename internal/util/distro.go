@@ -7,6 +7,10 @@ import (
 	"regexp"
 )
 
+var (
+	errNoIDFieldInFile = errors.New("failed to find id field in target file")
+)
+
 const (
 	DistroUnknown DistroType = "unknown"
 	DistroFlatcar DistroType = "flatcar"
@@ -40,5 +44,5 @@ func doGetDistro(path string) (DistroType, error) {
 		}
 	}
 
-	return DistroUnknown, errors.New("failed to find id field in target file")
+	return DistroUnknown, errNoIDFieldInFile
 }
