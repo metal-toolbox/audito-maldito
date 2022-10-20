@@ -7,7 +7,6 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
@@ -58,37 +57,50 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 	return &rawmsg, err
 }
 
-// JournaldConsumer is the main loop that consumes journald log entries.
-func JournaldConsumer(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	journaldChan <-chan *types.LogEntry,
-	w *auditevent.EventWriter,
-) {
+// Config configures the JournaldConsumer function.
+type Config struct {
+	Entries <-chan *types.LogEntry
+	EventW  *auditevent.EventWriter
+	Exited  chan<- error
+}
+
+// JournaldConsumer consumes systemd journal log entries and produces
+// audit events according the provided Config.
+func JournaldConsumer(ctx context.Context, config Config) {
+	config.Exited <- journaldConsumer(ctx, config)
+}
+
+// journaldConsumer makes a Go-routine-oriented function behave more like
+// a standard Go function by providing return values. This helps avoid
+// easy-to-make mistakes like writing to a channel - but not returning,
+// or potentially writing to the channel before any deferred function
+// calls are executed.
+func journaldConsumer(ctx context.Context, config Config) error {
 	mid, miderr := common.GetMachineID()
 	if miderr != nil {
-		log.Fatal(fmt.Errorf("failed to get machine id: %w", miderr))
+		return fmt.Errorf("failed to get machine id: %w", miderr)
 	}
 
 	nodename, nodenameerr := common.GetNodeName()
 	if nodenameerr != nil {
-		log.Fatal(fmt.Errorf("failed to get node name: %w", nodenameerr))
+		return fmt.Errorf("failed to get node name: %w", nodenameerr)
 	}
-
-	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("journaldConsumer: Interrupt received, exiting")
-			return
-		case entry := <-journaldChan:
+			return nil
+		case entry := <-config.Entries:
 			// This comes from journald's RealtimeTimestamp field.
 			usec := entry.Timestamp
 			ts := time.UnixMicro(int64(usec))
 			pid := entry.PID
 
-			processEntry(entry.Message, nodename, mid, ts, pid, w)
+			err := processEntry(entry.Message, nodename, mid, ts, pid, config.EventW)
+			if err != nil {
+				return fmt.Errorf("failed to process journal entry '%s': %w", entry.Message, err)
+			}
 		}
 	}
 }
@@ -99,8 +111,8 @@ func processEntry(
 	ts time.Time,
 	pid string,
 	w *auditevent.EventWriter,
-) {
-	var entryFunc func(string, string, string, time.Time, string, *auditevent.EventWriter)
+) error {
+	var entryFunc func(string, string, string, time.Time, string, *auditevent.EventWriter) error
 	switch {
 	case strings.HasPrefix(entry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
@@ -113,10 +125,11 @@ func processEntry(
 	}
 
 	if entryFunc != nil {
-		entryFunc(entry, nodename, mid, ts, pid, w)
+		return entryFunc(entry, nodename, mid, ts, pid, w)
 	}
 
 	// TODO(jaosorior): Should we log the entry if it didn't match?
+	return nil
 }
 
 func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) {
@@ -136,11 +149,11 @@ func processAcceptPublicKeyEntry(
 	when time.Time,
 	pid string,
 	w *auditevent.EventWriter,
-) {
+) error {
 	matches := loginRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
-		return
+		return nil
 	}
 
 	usrIdx := loginRE.SubexpIndex(idxLoginUserName)
@@ -177,9 +190,9 @@ func processAcceptPublicKeyEntry(
 		if err := w.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
-			log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 		}
-		return
+		return nil
 	}
 
 	certIdentifierStringStart := len(matches[0]) + 1
@@ -191,9 +204,9 @@ func processAcceptPublicKeyEntry(
 		if err := w.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
-			log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 		}
-		return
+		return nil
 	}
 
 	userIdx := certIDRE.SubexpIndex(idxCertUserID)
@@ -212,8 +225,10 @@ func processAcceptPublicKeyEntry(
 	if err := w.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
-		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 	}
+
+	return nil
 }
 
 func getCertificateInvalidReason(logentry string) string {
@@ -234,7 +249,7 @@ func processCertificateInvalidEntry(
 	when time.Time,
 	pid string,
 	w *auditevent.EventWriter,
-) {
+) error {
 	reason := getCertificateInvalidReason(logentry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
@@ -274,9 +289,11 @@ func processCertificateInvalidEntry(
 
 	if err := w.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
-		// merits us panicking here.
-		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		// merits us error-ing here.
+		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 	}
+
+	return nil
 }
 
 func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
@@ -296,11 +313,11 @@ func processNotInAllowUsersEntry(
 	when time.Time,
 	pid string,
 	w *auditevent.EventWriter,
-) {
+) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
-		return
+		return nil
 	}
 
 	usrIdx := notInAllowUsersRE.SubexpIndex(idxLoginUserName)
@@ -327,9 +344,11 @@ func processNotInAllowUsersEntry(
 	evt.LoggedAt = when
 	if err := w.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
-		// merits us panicking here.
-		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		// merits us error-ing here.
+		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 	}
+
+	return nil
 }
 
 func processInvalidUserEntry(
@@ -339,11 +358,11 @@ func processInvalidUserEntry(
 	when time.Time,
 	pid string,
 	w *auditevent.EventWriter,
-) {
+) error {
 	matches := invalidUserRE.FindStringSubmatch(logentry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
-		return
+		return nil
 	}
 
 	usrIdx := invalidUserRE.SubexpIndex(idxLoginUserName)
@@ -374,7 +393,9 @@ func processInvalidUserEntry(
 	evt.LoggedAt = when
 	if err := w.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
-		// merits us panicking here.
-		log.Fatal(fmt.Errorf("journaldConsumer: Failed to write event: %w", err))
+		// merits us error-ing here.
+		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
 	}
+
+	return nil
 }

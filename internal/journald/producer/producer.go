@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,21 +54,30 @@ func flushLastRead(lastReadToFlush *uint64) {
 	}
 }
 
-type JournaldProducerConfig struct {
-	WG      *sync.WaitGroup
+// Config configures the JournaldProducer function.
+type Config struct {
 	Entries chan<- *types.LogEntry
 	BootID  string
 	Distro  util.DistroType
+	Exited  chan<- error
 }
 
-//nolint
-func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
+// JournaldProducer monitors systemd journal(s) using the specified Config.
+func JournaldProducer(ctx context.Context, config Config) {
+	config.Exited <- journaldProducer(ctx, config)
+}
+
+// journaldProducer makes a Go-routine-oriented function behave more like
+// a standard Go function by providing return values. This helps avoid
+// easy-to-make mistakes like writing to a channel - but not returning,
+// or potentially writing to the channel before any deferred function
+// calls are executed.
+func journaldProducer(ctx context.Context, config Config) error {
 	var currentRead uint64
-	defer config.WG.Done()
 
 	j, err := newJournalReader(config.BootID, config.Distro)
 	if err != nil {
-		log.Fatalln(err) //nolint
+		return err
 	}
 	defer j.Close()
 
@@ -79,7 +87,7 @@ func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
 		select {
 		case <-ctx.Done():
 			log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
-			return
+			return nil
 		default:
 			isNewFile, nextErr := j.Next()
 			if nextErr != nil {
@@ -92,7 +100,7 @@ func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
 
 						j, err = resetJournal(j, config.BootID, config.Distro)
 						if err != nil {
-							log.Fatalf("failed to reset journal after next failed: %s", err) //nolint
+							return fmt.Errorf("failed to reset journal after next failed: %s", err)
 						}
 					}
 					continue
@@ -102,10 +110,7 @@ func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
 					log.Printf("journaldProducer: failed to close journal: %v", closeErr)
 				}
 
-				// TODO(jaosorior): Figure out a way to not panic here.
-				// Maybe closing the journaldChan?
-				//nolint:gocritic // We call Close above
-				log.Fatal(fmt.Errorf("failed to read next journal entry: %w", nextErr)) //nolint
+				return fmt.Errorf("failed to read next journal entry: %w", nextErr)
 			}
 
 			if isNewFile == 0 {
@@ -117,7 +122,7 @@ func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
 
 					j, err = resetJournal(j, config.BootID, config.Distro)
 					if err != nil {
-						log.Fatalf("failed to reset journal after wait failed: %s", err) //nolint
+						return fmt.Errorf("failed to reset journal after wait failed: %w", err)
 					}
 				}
 				continue
@@ -149,7 +154,7 @@ func JournaldProducer(ctx context.Context, config JournaldProducerConfig) {
 				atomic.StoreUint64(&currentRead, lg.Timestamp)
 			case <-ctx.Done():
 				log.Printf("journaldProducer: Exiting because context is done: %v", ctx.Err())
-				return
+				return nil
 			}
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/metal-toolbox/auditevent"
@@ -47,29 +46,37 @@ func mainWithErr() error {
 		return fmt.Errorf("fatal: failed to open audit log file: %w", auditfileerr)
 	}
 
-	w := auditevent.NewDefaultAuditEventWriter(auf)
+	log.Println("Starting workers...")
 
-	journaldChan := make(chan *types.LogEntry)
-	log.Println("Starting workers")
+	journaldEntries := make(chan *types.LogEntry)
+	routineExits := make(chan error, 2)
 
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go producer.JournaldProducer(ctx, producer.JournaldProducerConfig{
-		WG:      wg,
-		Entries: journaldChan,
+	go producer.JournaldProducer(ctx, producer.Config{
+		Entries: journaldEntries,
 		BootID:  bootID,
 		Distro:  distro,
+		Exited:  routineExits,
 	})
 
-	wg.Add(1)
-	go consumer.JournaldConsumer(ctx, wg, journaldChan, w)
+	go consumer.JournaldConsumer(ctx, consumer.Config{
+		Entries: journaldEntries,
+		EventW:  auditevent.NewDefaultAuditEventWriter(auf),
+		Exited:  routineExits,
+	})
 
-	wg.Wait()
+	// Wait until one of the Go routines exits.
+	err = <-routineExits
+
+	log.Println("Waiting for remaining worker(s) to exit...")
+
+	// Mark context as "done", thus triggering the second routine to exit.
+	// After marking context as done, wait for second routine to exit.
+	stop()
+	<-routineExits
 
 	log.Println("All workers finished")
 
-	return nil
+	return err
 }
 
 func main() {
