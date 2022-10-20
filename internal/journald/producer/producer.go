@@ -72,6 +72,8 @@ func JournaldProducer(ctx context.Context, config Config) {
 // easy-to-make mistakes like writing to a channel - but not returning,
 // or potentially writing to the channel before any deferred function
 // calls are executed.
+//
+//nolint:gocognit // I have no idea what this is trying to tell me.
 func journaldProducer(ctx context.Context, config Config) error {
 	var currentRead uint64
 
