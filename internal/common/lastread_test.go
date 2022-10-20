@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_GetLastRead(t *testing.T) {
+func Test_DoGetLastRead(t *testing.T) {
 	t.Parallel()
 
 	tmpdir := t.TempDir()
