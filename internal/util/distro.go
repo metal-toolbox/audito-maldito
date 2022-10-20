@@ -7,9 +7,7 @@ import (
 	"regexp"
 )
 
-var (
-	errNoIDFieldInFile = errors.New("failed to find id field in target file")
-)
+var errNoIDFieldInFile = errors.New("failed to find id field in target file")
 
 const (
 	DistroUnknown DistroType = "unknown"
