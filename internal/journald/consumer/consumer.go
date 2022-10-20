@@ -97,7 +97,14 @@ func journaldConsumer(ctx context.Context, config Config) error {
 			ts := time.UnixMicro(int64(usec))
 			pid := entry.PID
 
-			err := processEntry(entry.Message, nodename, mid, ts, pid, config.EventW)
+			err := processEntry(processEntryConfig{
+				logEntry:  entry.Message,
+				nodeName:  nodename,
+				machineID: mid,
+				when:      ts,
+				pid:       pid,
+				eventW:    config.EventW,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to process journal entry '%s': %w", entry.Message, err)
 			}
@@ -105,27 +112,30 @@ func journaldConsumer(ctx context.Context, config Config) error {
 	}
 }
 
-func processEntry(
-	entry string,
-	nodename, mid string,
-	ts time.Time,
-	pid string,
-	w *auditevent.EventWriter,
-) error {
-	var entryFunc func(string, string, string, time.Time, string, *auditevent.EventWriter) error
+type processEntryConfig struct {
+	logEntry  string
+	nodeName  string
+	machineID string
+	when      time.Time
+	pid       string
+	eventW    *auditevent.EventWriter
+}
+
+func processEntry(config processEntryConfig) error {
+	var entryFunc func(processEntryConfig) error
 	switch {
-	case strings.HasPrefix(entry, "Accepted publickey"):
+	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
-	case strings.HasPrefix(entry, "Certificate invalid"):
+	case strings.HasPrefix(config.logEntry, "Certificate invalid"):
 		entryFunc = processCertificateInvalidEntry
-	case strings.HasSuffix(entry, "not allowed because not listed in AllowUsers"):
+	case strings.HasSuffix(config.logEntry, "not allowed because not listed in AllowUsers"):
 		entryFunc = processNotInAllowUsersEntry
-	case strings.HasPrefix(entry, "Invalid user"):
+	case strings.HasPrefix(config.logEntry, "Invalid user"):
 		entryFunc = processInvalidUserEntry
 	}
 
 	if entryFunc != nil {
-		return entryFunc(entry, nodename, mid, ts, pid, w)
+		return entryFunc(config)
 	}
 
 	// TODO(jaosorior): Should we log the entry if it didn't match?
@@ -142,15 +152,8 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(
-	logentry string,
-	nodename string,
-	mid string,
-	when time.Time,
-	pid string,
-	w *auditevent.EventWriter,
-) error {
-	matches := loginRE.FindStringSubmatch(logentry)
+func processAcceptPublicKeyEntry(config processEntryConfig) error {
+	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
 		return nil
@@ -174,20 +177,20 @@ func processAcceptPublicKeyEntry(
 		auditevent.OutcomeSucceeded,
 		map[string]string{
 			"loggedAs": matches[usrIdx],
-			"pid":      pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       nodename,
-		"machine-id": mid,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = when
+	evt.LoggedAt = config.when
 
-	if len(logentry) == len(matches[0]) {
+	if len(config.logEntry) == len(matches[0]) {
 		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		if err := w.Write(evt); err != nil {
+		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
 			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
@@ -196,12 +199,12 @@ func processAcceptPublicKeyEntry(
 	}
 
 	certIdentifierStringStart := len(matches[0]) + 1
-	certIdentifierString := logentry[certIdentifierStringStart:]
+	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	if idMatches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		if err := w.Write(evt); err != nil {
+		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
 			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
@@ -222,7 +225,7 @@ func processAcceptPublicKeyEntry(
 		evt = evt.WithData(ed)
 	}
 
-	if err := w.Write(evt); err != nil {
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
 		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
@@ -242,15 +245,8 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(
-	logentry string,
-	nodename string,
-	mid string,
-	when time.Time,
-	pid string,
-	w *auditevent.EventWriter,
-) error {
-	reason := getCertificateInvalidReason(logentry)
+func processCertificateInvalidEntry(config processEntryConfig) error {
+	reason := getCertificateInvalidReason(config.logEntry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
 	//                  For flatcar, we could get it from the CGROUP.... not sure for Ubuntu though
@@ -270,15 +266,15 @@ func processCertificateInvalidEntry(
 		map[string]string{
 			"loggedAs": common.UnknownUser,
 			"userID":   common.UnknownUser,
-			"pid":      pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       nodename,
-		"machine-id": mid,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = when
+	evt.LoggedAt = config.when
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {
@@ -287,7 +283,7 @@ func processCertificateInvalidEntry(
 		evt = evt.WithData(ed)
 	}
 
-	if err := w.Write(evt); err != nil {
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
@@ -306,15 +302,8 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(
-	logentry string,
-	nodename string,
-	mid string,
-	when time.Time,
-	pid string,
-	w *auditevent.EventWriter,
-) error {
-	matches := notInAllowUsersRE.FindStringSubmatch(logentry)
+func processNotInAllowUsersEntry(config processEntryConfig) error {
+	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
 		return nil
@@ -333,16 +322,16 @@ func processNotInAllowUsersEntry(
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
-			"pid":      pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       nodename,
-		"machine-id": mid,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = when
-	if err := w.Write(evt); err != nil {
+	evt.LoggedAt = config.when
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
@@ -351,15 +340,8 @@ func processNotInAllowUsersEntry(
 	return nil
 }
 
-func processInvalidUserEntry(
-	logentry string,
-	nodename string,
-	mid string,
-	when time.Time,
-	pid string,
-	w *auditevent.EventWriter,
-) error {
-	matches := invalidUserRE.FindStringSubmatch(logentry)
+func processInvalidUserEntry(config processEntryConfig) error {
+	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
 		return nil
@@ -382,16 +364,16 @@ func processInvalidUserEntry(
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
-			"pid":      pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       nodename,
-		"machine-id": mid,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = when
-	if err := w.Write(evt); err != nil {
+	evt.LoggedAt = config.when
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)

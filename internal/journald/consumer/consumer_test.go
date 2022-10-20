@@ -270,7 +270,14 @@ func TestEntryProcessing(t *testing.T) {
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
 
-			err := processEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, tt.args.pid, w)
+			err := processEntry(processEntryConfig{
+				logEntry:  tt.args.logentry,
+				nodeName:  tt.args.nodename,
+				machineID: tt.args.mid,
+				when:      expectedts,
+				pid:       tt.args.pid,
+				eventW:    w,
+			})
 			assert.NoError(t, err)
 
 			compareAuditLogs(t, tt.want, enc.evt)
