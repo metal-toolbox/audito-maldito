@@ -270,7 +270,7 @@ func TestEntryProcessing(t *testing.T) {
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
 
-			err := processEntry(processEntryConfig{
+			err := processEntry(&processEntryConfig{
 				logEntry:  tt.args.logentry,
 				nodeName:  tt.args.nodename,
 				machineID: tt.args.mid,

@@ -97,7 +97,7 @@ func journaldConsumer(ctx context.Context, config Config) error {
 			ts := time.UnixMicro(int64(usec))
 			pid := entry.PID
 
-			err := processEntry(processEntryConfig{
+			err := processEntry(&processEntryConfig{
 				logEntry:  entry.Message,
 				nodeName:  nodename,
 				machineID: mid,
@@ -121,8 +121,8 @@ type processEntryConfig struct {
 	eventW    *auditevent.EventWriter
 }
 
-func processEntry(config processEntryConfig) error {
-	var entryFunc func(processEntryConfig) error
+func processEntry(config *processEntryConfig) error {
+	var entryFunc func(*processEntryConfig) error
 	switch {
 	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
@@ -152,7 +152,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(config processEntryConfig) error {
+func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
@@ -245,7 +245,7 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(config processEntryConfig) error {
+func processCertificateInvalidEntry(config *processEntryConfig) error {
 	reason := getCertificateInvalidReason(config.logEntry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
@@ -302,7 +302,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(config processEntryConfig) error {
+func processNotInAllowUsersEntry(config *processEntryConfig) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
@@ -340,7 +340,7 @@ func processNotInAllowUsersEntry(config processEntryConfig) error {
 	return nil
 }
 
-func processInvalidUserEntry(config processEntryConfig) error {
+func processInvalidUserEntry(config *processEntryConfig) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
