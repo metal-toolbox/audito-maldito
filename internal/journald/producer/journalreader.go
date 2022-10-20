@@ -140,6 +140,8 @@ func getDistroSpecificMatch(distro util.DistroType) (sdjournal.Match, error) {
 			Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
 			Value: "ssh.service",
 		}, nil
+	case util.DistroUnknown:
+		return sdjournal.Match{}, errors.New("unknown os distro (literally)")
 	default:
 		return sdjournal.Match{}, fmt.Errorf("unsupported os distro: '%s'", distro)
 	}

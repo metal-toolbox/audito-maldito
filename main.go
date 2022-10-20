@@ -47,9 +47,10 @@ func mainWithErr() error {
 	}
 
 	log.Println("Starting workers...")
+	numWorkers := 2
 
 	journaldEntries := make(chan *types.LogEntry)
-	routineExits := make(chan error, 2)
+	routineExits := make(chan error, numWorkers)
 
 	go producer.JournaldProducer(ctx, producer.Config{
 		Entries: journaldEntries,

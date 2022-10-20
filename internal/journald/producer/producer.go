@@ -100,7 +100,7 @@ func journaldProducer(ctx context.Context, config Config) error {
 
 						j, err = resetJournal(j, config.BootID, config.Distro)
 						if err != nil {
-							return fmt.Errorf("failed to reset journal after next failed: %s", err)
+							return fmt.Errorf("failed to reset journal after next failed: %w", err)
 						}
 					}
 					continue

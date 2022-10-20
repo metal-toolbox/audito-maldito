@@ -269,7 +269,9 @@ func TestEntryProcessing(t *testing.T) {
 
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
-			processEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, tt.args.pid, w)
+
+			err := processEntry(tt.args.logentry, tt.args.nodename, tt.args.mid, expectedts, tt.args.pid, w)
+			assert.NoError(t, err)
 
 			compareAuditLogs(t, tt.want, enc.evt)
 
