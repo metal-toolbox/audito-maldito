@@ -28,7 +28,7 @@ func resetJournal(j JournalReader, bootID string, distro util.DistroType) (Journ
 		log.Printf("journaldProducer: failed to close journal: %v", err)
 	}
 
-	return newJournalReader(bootID, distro) //nolint
+	return newJournalReader(bootID, distro)
 }
 
 // writes the last read timestamp to a file

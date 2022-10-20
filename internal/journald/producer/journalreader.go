@@ -23,7 +23,6 @@ type journalReaderImpl struct {
 	journal *sdjournal.Journal
 }
 
-//nolint
 func newJournalReader(bootID string, distro util.DistroType) (JournalReader, error) {
 	j, err := sdjournal.NewJournal()
 	if err != nil {
