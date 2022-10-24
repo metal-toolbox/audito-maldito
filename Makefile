@@ -1,3 +1,15 @@
+GOLANGCI_LINT_VERSION = v1.50.0
+
+TOOLS_DIR = .tools
+
+LIVE_INSTANCE?=""
+INSTANCE_USER?=core
+LIVE_INSTANCE_BOOT_ID=
+TEST_LIVE_INSTANCE_DIR=live-instance-test
+
+IMAGE=ghcr.io/metal-toolbox/audito-maldito
+TAG=latest
+
 .PHONY: all
 all: image run-test
 
@@ -13,17 +25,66 @@ lint:
 
 .PHONY: image
 image:
-	docker build -t localbuild/audito-maldito:latest .
+	docker build -t $(IMAGE):$(TAG) .
+
+.PHONY: verify-live-instance-var
+verify-live-instance-var:
+ifeq ($(LIVE_INSTANCE),)
+	$(error LIVE_INSTANCE is not set)
+else
+	@echo "LIVE_INSTANCE is set to $(LIVE_INSTANCE)"
+endif
+
+$(TEST_LIVE_INSTANCE_DIR):
+	@mkdir -p $(TEST_LIVE_INSTANCE_DIR)
+
+$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE): $(TEST_LIVE_INSTANCE_DIR)
+	@echo "Downloading $(LIVE_INSTANCE) to $(TEST_LIVE_INSTANCE_DIR)"
+	@mkdir -p $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)
+	$(eval LIVE_INSTANCE_BOOT_ID := $(shell ssh $(INSTANCE_USER)@$(LIVE_INSTANCE) "sudo cat /proc/sys/kernel/random/boot_id" | sed 's/-//g'))
+	@echo "Using Boot ID $(LIVE_INSTANCE_BOOT_ID)"
+	echo $(LIVE_INSTANCE_BOOT_ID) > $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/boot_id
+	scp -r $(INSTANCE_USER)@$(LIVE_INSTANCE):/var/log/journal $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)
+	@echo "Downloading Machine-ID"
+	scp $(INSTANCE_USER)@$(LIVE_INSTANCE):/etc/machine-id $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/machine-id
+	@echo "Downloading os-release"
+	scp $(INSTANCE_USER)@$(LIVE_INSTANCE):/etc/os-release $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/os-release
+
+$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run:
+	@echo "Ensuring run dir"
+	mkdir -p $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run
+
+.PHONY: instance-test-audit-log
+instance-test-audit-log:
+	@echo "Ensuring audit log in run dir"
+	touch $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run/audit.log
+	@echo "truncating audit log"
+	echo "" > $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run/audit.log
 
 .PHONY: run-test
-run-test:
+instance-test: verify-live-instance-var $(TEST_LIVE_INSTANCE_DIR) $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE) $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run instance-test-audit-log image
 	docker run -ti \
 		-e NODE_NAME=my-funky-node-name \
-		-v $$PWD/journaldir:/var/log/journal/b3f9b6f421fc4af5b8770b54ebceb5ca:ro \
-		-v $$PWD/machine-id:/etc/machine-id:ro \
-		-v $$PWD/machine-id:/var/lib/dbus/machine-id:ro \
-		-v $$PWD/os-release:/etc/os-release:ro \
-		-v $$PWD/run:/var/run/audito-maldito \
-		localbuild/audito-maldito:latest \
-		--boot-id 050f00188b4b425592e35d0146cbf043 \
+		-v $$PWD/$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/journal:/var/log/journal:ro \
+		-v $$PWD/$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/machine-id:/etc/machine-id:ro \
+		-v $$PWD/$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/os-release:/etc/os-release:ro \
+		-v $$PWD/$(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/run:/var/run/audito-maldito \
+		$(IMAGE):$(TAG) \
+		--boot-id $(shell cat $(TEST_LIVE_INSTANCE_DIR)/$(LIVE_INSTANCE)/boot_id) \
 		--audit-log-path /var/run/audito-maldito/audit.log
+
+.PHONY: clean-instance-test
+clean-instance-test:
+	@rm -rf $(TEST_LIVE_INSTANCE_DIR)
+
+$(TOOLS_DIR):
+	mkdir -p $(TOOLS_DIR)
+
+$(TOOLS_DIR)/golangci-lint:
+	export \
+		VERSION=$(GOLANGCI_LINT_VERSION) \
+		URL=https://raw.githubusercontent.com/golangci/golangci-lint \
+		BINDIR=$(TOOLS_DIR) && \
+	curl -sfL $$URL/$$VERSION/install.sh | sh -s $$VERSION
+	$(TOOLS_DIR)/golangci-lint version
+	$(TOOLS_DIR)/golangci-lint linters
