@@ -1,7 +1,6 @@
-package consumer
+package journald
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,7 +11,6 @@ import (
 	"github.com/metal-toolbox/auditevent"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
 )
 
 const (
@@ -55,61 +53,6 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 	raw, err := json.Marshal(extraData)
 	rawmsg := json.RawMessage(raw)
 	return &rawmsg, err
-}
-
-// Config configures the JournaldConsumer function.
-type Config struct {
-	Entries <-chan *types.LogEntry
-	EventW  *auditevent.EventWriter
-	Exited  chan<- error
-}
-
-// JournaldConsumer consumes systemd journal log entries and produces
-// audit events according the provided Config.
-func JournaldConsumer(ctx context.Context, config Config) {
-	config.Exited <- journaldConsumer(ctx, config)
-}
-
-// journaldConsumer makes a Go-routine-oriented function behave more like
-// a standard Go function by providing return values. This helps avoid
-// easy-to-make mistakes like writing to a channel - but not returning,
-// or potentially writing to the channel before any deferred function
-// calls are executed.
-func journaldConsumer(ctx context.Context, config Config) error {
-	mid, miderr := common.GetMachineID()
-	if miderr != nil {
-		return fmt.Errorf("failed to get machine id: %w", miderr)
-	}
-
-	nodename, nodenameerr := common.GetNodeName()
-	if nodenameerr != nil {
-		return fmt.Errorf("failed to get node name: %w", nodenameerr)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("journaldConsumer: Interrupt received, exiting")
-			return nil
-		case entry := <-config.Entries:
-			// This comes from journald's RealtimeTimestamp field.
-			usec := entry.Timestamp
-			ts := time.UnixMicro(int64(usec))
-			pid := entry.PID
-
-			err := processEntry(&processEntryConfig{
-				logEntry:  entry.Message,
-				nodeName:  nodename,
-				machineID: mid,
-				when:      ts,
-				pid:       pid,
-				eventW:    config.EventW,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to process journal entry '%s': %w", entry.Message, err)
-			}
-		}
-	}
 }
 
 type processEntryConfig struct {

@@ -1,7 +1,7 @@
 //go:build linux
 // +build linux
 
-package producer
+package journald
 
 import (
 	"errors"

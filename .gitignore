@@ -1,3 +1,4 @@
 .vscode/
 .tools/
 live-instance-test
+coverage.out

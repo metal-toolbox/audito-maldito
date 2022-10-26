@@ -11,11 +11,10 @@ import (
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/internal/journald/consumer"
-	"github.com/metal-toolbox/audito-maldito/internal/journald/producer"
-	"github.com/metal-toolbox/audito-maldito/internal/journald/types"
+	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -32,9 +31,21 @@ func mainWithErr() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	eg, gctx := errgroup.WithContext(ctx)
+
 	distro, err := util.Distro()
 	if err != nil {
 		return fmt.Errorf("fatal: failed to get os distro type: %w", err)
+	}
+
+	mid, miderr := common.GetMachineID()
+	if miderr != nil {
+		return fmt.Errorf("fatal: failed to get machine id: %w", miderr)
+	}
+
+	nodename, nodenameerr := common.GetNodeName()
+	if nodenameerr != nil {
+		return fmt.Errorf("fatal: failed to get node name: %w", nodenameerr)
 	}
 
 	if err := common.EnsureFlushDirectory(); err != nil {
@@ -47,33 +58,21 @@ func mainWithErr() error {
 	}
 
 	log.Println("Starting workers...")
-	numWorkers := 2
 
-	journaldEntries := make(chan *types.LogEntry)
-	routineExits := make(chan error, numWorkers)
-
-	go producer.JournaldProducer(ctx, producer.Config{
-		Entries: journaldEntries,
-		BootID:  bootID,
-		Distro:  distro,
-		Exited:  routineExits,
+	eg.Go(func() error {
+		jp := journald.Processor{
+			BootID:    bootID,
+			MachineID: mid,
+			NodeName:  nodename,
+			Distro:    distro,
+			EventW:    auditevent.NewDefaultAuditEventWriter(auf),
+		}
+		return jp.Read(gctx)
 	})
 
-	go consumer.JournaldConsumer(ctx, consumer.Config{
-		Entries: journaldEntries,
-		EventW:  auditevent.NewDefaultAuditEventWriter(auf),
-		Exited:  routineExits,
-	})
-
-	// Wait until one of the Go routines exits.
-	err = <-routineExits
-
-	log.Println("Waiting for remaining worker(s) to exit...")
-
-	// Mark context as "done", thus triggering the second routine to exit.
-	// After marking context as done, wait for second routine to exit.
-	stop()
-	<-routineExits
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("fatal: error while waiting for workers: %w", err)
+	}
 
 	log.Println("All workers finished")
 

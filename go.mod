@@ -6,6 +6,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.4.0
 	github.com/metal-toolbox/auditevent v0.5.1
 	github.com/stretchr/testify v1.8.1
+	golang.org/x/sync v0.1.0
 )
 
 require (
