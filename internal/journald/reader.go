@@ -133,8 +133,8 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	err := processEntry(&processEntryConfig{
 		logEntry:  entryMsg,
-		nodeName:  jp.MachineID,
-		machineID: jp.NodeName,
+		nodeName:  jp.NodeName,
+		machineID: jp.MachineID,
 		when:      ts,
 		pid:       entry.GetPID(),
 		eventW:    jp.EventW,
