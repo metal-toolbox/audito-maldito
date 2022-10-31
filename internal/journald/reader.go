@@ -1,4 +1,4 @@
-// package journald contains the functions for
+// Package journald contains the functions for
 // audito maldito to interact with journald
 package journald
 
@@ -46,7 +46,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 	jp.configureLogger()
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.l)
 	if err != nil {
 		return err
 	}
@@ -82,8 +82,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		if errors.Is(nextErr, io.EOF) {
 			if r := j.Wait(defaultSleep); r < 0 {
 				flushLastRead(jp.l, currentRead)
-				jp.l.Printf("journal reader: wait failed after calling next, "+
-					"reinitializing. error-code: %d", r)
+				jp.l.Printf("wait failed after calling next, reinitializing (error-code: %d)", r)
 				time.Sleep(defaultSleep)
 
 				if err := jp.resetJournal(); err != nil {
@@ -138,6 +137,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		when:      ts,
 		pid:       entry.GetPID(),
 		eventW:    jp.EventW,
+		logger:    jp.l,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)
@@ -152,7 +152,7 @@ func (jp *Processor) resetJournal() error {
 	}
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.l)
 	if err != nil {
 		return fmt.Errorf("failed to reset journal: %w", err)
 	}

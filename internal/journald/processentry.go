@@ -62,6 +62,7 @@ type processEntryConfig struct {
 	when      time.Time
 	pid       string
 	eventW    *auditevent.EventWriter
+	logger    *log.Logger
 }
 
 func processEntry(config *processEntryConfig) error {
@@ -85,11 +86,11 @@ func processEntry(config *processEntryConfig) error {
 	return nil
 }
 
-func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) {
+func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string, logger *log.Logger) {
 	evt.Subjects["userID"] = common.UnknownUser
 	ed, ederr := extraDataWithoutCA(alg, keySum)
 	if ederr != nil {
-		log.Println("journaldConsumer: Failed to create extra data for login event")
+		logger.Printf("failed to create extra data for login event: %s", ederr)
 	} else {
 		evt.WithData(ed)
 	}
@@ -98,7 +99,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		log.Println("journaldConsumer: Got login entry with no matches for identifiers")
+		config.logger.Println("got login entry with no matches for identifiers")
 		return nil
 	}
 
@@ -131,12 +132,12 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	evt.LoggedAt = config.when
 
 	if len(config.logEntry) == len(matches[0]) {
-		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
-		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
+		config.logger.Println("got login entry with no matches for certificate identifiers")
+		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx], config.logger)
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
-			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+			return fmt.Errorf("failed to write event: %w", err)
 		}
 		return nil
 	}
@@ -145,12 +146,12 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	if idMatches == nil {
-		log.Println("journaldConsumer: Got login entry with no matches for certificate identifiers")
-		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
+		config.logger.Println("got login entry with no matches for certificate identifiers")
+		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx], config.logger)
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
-			return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+			return fmt.Errorf("failed to write event: %w", err)
 		}
 		return nil
 	}
@@ -163,7 +164,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataWithCA(matches[algIdx], matches[keyIdx], idMatches[serialIdx], idMatches[caIdx])
 	if ederr != nil {
-		log.Println("journaldConsumer: Failed to create extra data for login event")
+		config.logger.Printf("failed to create extra data for login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -171,7 +172,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
-		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+		return fmt.Errorf("failed to write event: %w", err)
 	}
 
 	return nil
@@ -221,7 +222,7 @@ func processCertificateInvalidEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {
-		log.Println("journaldConsumer: Failed to create extra data for invalid cert login event")
+		config.logger.Printf("failed to create extra data for invalid cert login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -229,7 +230,7 @@ func processCertificateInvalidEntry(config *processEntryConfig) error {
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
-		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+		return fmt.Errorf("failed to write event: %w", err)
 	}
 
 	return nil
@@ -248,7 +249,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 func processNotInAllowUsersEntry(config *processEntryConfig) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		log.Println("journaldConsumer: Got login entry with no matches for not-in-allow-users")
+		config.logger.Println("got login entry with no matches for not-in-allow-users")
 		return nil
 	}
 
@@ -277,7 +278,7 @@ func processNotInAllowUsersEntry(config *processEntryConfig) error {
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
-		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+		return fmt.Errorf("failed to write event: %w", err)
 	}
 
 	return nil
@@ -286,7 +287,7 @@ func processNotInAllowUsersEntry(config *processEntryConfig) error {
 func processInvalidUserEntry(config *processEntryConfig) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		log.Println("journaldConsumer: Got login entry with no matches for invalid-user")
+		config.logger.Println("got login entry with no matches for invalid-user")
 		return nil
 	}
 
@@ -319,7 +320,7 @@ func processInvalidUserEntry(config *processEntryConfig) error {
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
-		return fmt.Errorf("journaldConsumer: Failed to write event: %w", err)
+		return fmt.Errorf("failed to write event: %w", err)
 	}
 
 	return nil

@@ -23,7 +23,7 @@ type journalReaderImpl struct {
 	journal *sdjournal.Journal
 }
 
-func newJournalReader(bootID string, distro util.DistroType) (JournalReader, error) {
+func newJournalReader(bootID string, distro util.DistroType, logger *log.Logger) (JournalReader, error) {
 	j, err := sdjournal.NewJournal()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open journal: %w", err)
@@ -55,7 +55,7 @@ func newJournalReader(bootID string, distro util.DistroType) (JournalReader, err
 		return nil, fmt.Errorf("failed to add ssh match: %w", err)
 	}
 
-	log.Printf("distro: '%s' | boot id: '%s'", distro, bootID)
+	logger.Printf("distro: '%s' | boot id: '%s'", distro, bootID)
 
 	// NOTE(jaosorior): We only care about the current boot
 	matchBootID := sdjournal.Match{
@@ -71,12 +71,12 @@ func newJournalReader(bootID string, distro util.DistroType) (JournalReader, err
 	// Attempt to get the last read position from the journal.
 	lastRead, reason := common.GetLastRead()
 	if lastRead == 0 {
-		log.Printf("journaldConsumer: No last read position found, "+
+		logger.Printf("no last read position found, "+
 			"reading from the beginning (reason: '%s')", reason)
 	} else {
-		log.Printf("journaldConsumer: Last read position: %d", lastRead)
+		logger.Printf("last read position: %d", lastRead)
 		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
-			log.Printf("journaldConsumer: failed to seek to last read position, "+
+			logger.Printf("failed to seek to last read position, "+
 				"attempting to continue anyway (err: '%s')", err)
 		}
 	}
