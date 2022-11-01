@@ -1,15 +1,24 @@
 package journald
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
+
+// Refer to "go doc -all testing" for more information.
+func TestMain(m *testing.M) {
+	l := zap.NewNop()
+	logger = l.Sugar()
+	os.Exit(m.Run())
+}
 
 type testAuditEventEncoder struct {
 	evt *auditevent.AuditEvent

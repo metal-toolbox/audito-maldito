@@ -22,10 +22,10 @@ const (
 func flushLastRead(lastReadToFlush *uint64) {
 	lastRead := atomic.LoadUint64(lastReadToFlush)
 
-	Logger.Infof("Flushing last read timestamp %d", lastRead)
+	logger.Infof("Flushing last read timestamp %d", lastRead)
 
 	if err := common.EnsureFlushDirectory(); err != nil {
-		Logger.Errorf("Failed to ensure flush directory: %v", err)
+		logger.Errorf("Failed to ensure flush directory: %v", err)
 		return
 	}
 
@@ -34,6 +34,6 @@ func flushLastRead(lastReadToFlush *uint64) {
 	// or by truncating an existing file.
 	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), onlyUserReadable)
 	if err != nil {
-		Logger.Errorf("failed to write flush file: %s", err)
+		logger.Errorf("failed to write flush file: %s", err)
 	}
 }

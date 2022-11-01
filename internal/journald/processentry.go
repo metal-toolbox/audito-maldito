@@ -32,13 +32,11 @@ var (
 	notInAllowUsersRE = regexp.MustCompile(`User (?P<Username>\w+) from (?P<Source>\S+) not allowed because not listed in AllowUsers`)
 	invalidUserRE     = regexp.MustCompile(`Invalid user (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+)`)
 
-	Logger *zap.SugaredLogger
+	logger *zap.SugaredLogger
 )
 
-//nolint:gochecknoinits // I do not know of a better way.
-func init() {
-	noOp := zap.NewNop()
-	Logger = noOp.Sugar()
+func SetLogger(l *zap.SugaredLogger) {
+	logger = l
 }
 
 func extraDataWithoutCA(alg, keySum string) (*json.RawMessage, error) {
@@ -97,7 +95,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	evt.Subjects["userID"] = common.UnknownUser
 	ed, ederr := extraDataWithoutCA(alg, keySum)
 	if ederr != nil {
-		Logger.Errorf("failed to create extra data for login event: %s", ederr)
+		logger.Errorf("failed to create extra data for login event: %s", ederr)
 	} else {
 		evt.WithData(ed)
 	}
@@ -106,7 +104,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		Logger.Infoln("got login entry with no matches for identifiers")
+		logger.Infoln("got login entry with no matches for identifiers")
 		return nil
 	}
 
@@ -139,7 +137,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	evt.LoggedAt = config.when
 
 	if len(config.logEntry) == len(matches[0]) {
-		Logger.Infoln("got login entry with no matches for certificate identifiers")
+		logger.Infoln("got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
@@ -153,7 +151,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	if idMatches == nil {
-		Logger.Infoln("got login entry with no matches for certificate identifiers")
+		logger.Infoln("got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
@@ -171,7 +169,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataWithCA(matches[algIdx], matches[keyIdx], idMatches[serialIdx], idMatches[caIdx])
 	if ederr != nil {
-		Logger.Errorf("failed to create extra data for login event - %s", ederr)
+		logger.Errorf("failed to create extra data for login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -229,7 +227,7 @@ func processCertificateInvalidEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {
-		Logger.Errorf("failed to create extra data for invalid cert login event - %s", ederr)
+		logger.Errorf("failed to create extra data for invalid cert login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -256,7 +254,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 func processNotInAllowUsersEntry(config *processEntryConfig) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		Logger.Infoln("got login entry with no matches for not-in-allow-users")
+		logger.Infoln("got login entry with no matches for not-in-allow-users")
 		return nil
 	}
 
@@ -294,7 +292,7 @@ func processNotInAllowUsersEntry(config *processEntryConfig) error {
 func processInvalidUserEntry(config *processEntryConfig) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		Logger.Infoln("got login entry with no matches for invalid-user")
+		logger.Infoln("got login entry with no matches for invalid-user")
 		return nil
 	}
 

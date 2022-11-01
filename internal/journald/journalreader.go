@@ -54,7 +54,7 @@ func newJournalReader(bootID string, distro util.DistroType) (JournalReader, err
 		return nil, fmt.Errorf("failed to add ssh match: %w", err)
 	}
 
-	Logger.Infof("distro: '%s' | boot id: '%s'", distro, bootID)
+	logger.Infof("distro: '%s' | boot id: '%s'", distro, bootID)
 
 	// NOTE(jaosorior): We only care about the current boot
 	matchBootID := sdjournal.Match{
@@ -70,12 +70,12 @@ func newJournalReader(bootID string, distro util.DistroType) (JournalReader, err
 	// Attempt to get the last read position from the journal.
 	lastRead, reason := common.GetLastRead()
 	if lastRead == 0 {
-		Logger.Infof("no last read position found, "+
+		logger.Infof("no last read position found, "+
 			"reading from the beginning (reason: '%s')", reason)
 	} else {
-		Logger.Infof("last read position: %d", lastRead)
+		logger.Infof("last read position: %d", lastRead)
 		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
-			Logger.Errorf("failed to seek to last read position, "+
+			logger.Errorf("failed to seek to last read position, "+
 				"attempting to continue anyway (err: '%s')", err)
 		}
 	}

@@ -52,7 +52,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			Logger.Infof("Exiting because context is done: %v", ctx.Err())
+			logger.Infof("Exiting because context is done: %v", ctx.Err())
 			return nil
 		default:
 			if err := jp.readEntry(&currentRead); err != nil {
@@ -72,7 +72,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		if errors.Is(nextErr, io.EOF) {
 			if r := j.Wait(defaultSleep); r < 0 {
 				flushLastRead(currentRead)
-				Logger.Infof("wait failed after calling next, reinitializing (error-code: %d)", r)
+				logger.Infof("wait failed after calling next, reinitializing (error-code: %d)", r)
 				time.Sleep(defaultSleep)
 
 				if err := jp.resetJournal(); err != nil {
@@ -84,7 +84,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		}
 
 		if closeErr := j.Close(); closeErr != nil {
-			Logger.Errorf("failed to close journal: %v", closeErr)
+			logger.Errorf("failed to close journal: %v", closeErr)
 		}
 
 		return fmt.Errorf("failed to read next journal entry: %w", nextErr)
@@ -93,7 +93,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 	if isNewFile == 0 {
 		if r := j.Wait(defaultSleep); r < 0 {
 			flushLastRead(currentRead)
-			Logger.Errorf("wait failed after checking for new journal file, "+
+			logger.Errorf("wait failed after checking for new journal file, "+
 				"reinitializing. error-code: %d", r)
 			time.Sleep(defaultSleep)
 
@@ -106,13 +106,13 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	entry, geErr := j.GetEntry()
 	if geErr != nil {
-		Logger.Errorf("Error getting entry: %v", geErr)
+		logger.Errorf("Error getting entry: %v", geErr)
 		return ErrNonFatal
 	}
 
 	entryMsg, hasMessage := entry.GetMessage()
 	if !hasMessage {
-		Logger.Error("Got entry with no MESSAGE")
+		logger.Error("Got entry with no MESSAGE")
 		return ErrNonFatal
 	}
 
@@ -137,7 +137,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 func (jp *Processor) resetJournal() error {
 	if err := jp.jr.Close(); err != nil {
-		Logger.Errorf("failed to close journal: %v", err)
+		logger.Errorf("failed to close journal: %v", err)
 	}
 
 	var err error

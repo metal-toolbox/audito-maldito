@@ -19,6 +19,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
+var logger *zap.SugaredLogger
+
 func mainWithErr() error {
 	var bootID string
 	var auditlogpath string
@@ -28,6 +30,19 @@ func mainWithErr() error {
 	flag.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 
 	flag.Parse()
+
+	l, err := zap.NewProduction()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = l.Sync() //nolint
+	}()
+
+	logger = l.Sugar()
+
+	journald.SetLogger(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -58,19 +73,7 @@ func mainWithErr() error {
 		return fmt.Errorf("fatal: failed to open audit log file: %w", auditfileerr)
 	}
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		_ = logger.Sync() //nolint
-	}()
-
-	sugar := logger.Sugar()
-	journald.Logger = sugar
-
-	sugar.Infoln("starting workers...")
+	logger.Infoln("starting workers...")
 
 	eg.Go(func() error {
 		jp := journald.Processor{
@@ -87,7 +90,7 @@ func mainWithErr() error {
 		return fmt.Errorf("fatal: error while waiting for workers: %w", err)
 	}
 
-	sugar.Infoln("all workers finished")
+	logger.Infoln("all workers finished")
 
 	return err
 }
