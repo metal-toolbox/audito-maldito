@@ -3,12 +3,12 @@ package journald
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
+	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
@@ -31,7 +31,15 @@ var (
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
 	notInAllowUsersRE = regexp.MustCompile(`User (?P<Username>\w+) from (?P<Source>\S+) not allowed because not listed in AllowUsers`)
 	invalidUserRE     = regexp.MustCompile(`Invalid user (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+)`)
+
+	Logger *zap.SugaredLogger
 )
+
+//nolint:gochecknoinits // I do not know of a better way.
+func init() {
+	noOp := zap.NewNop()
+	Logger = noOp.Sugar()
+}
 
 func extraDataWithoutCA(alg, keySum string) (*json.RawMessage, error) {
 	extraData := map[string]string{
@@ -62,7 +70,6 @@ type processEntryConfig struct {
 	when      time.Time
 	pid       string
 	eventW    *auditevent.EventWriter
-	logger    *log.Logger
 }
 
 func processEntry(config *processEntryConfig) error {
@@ -86,11 +93,11 @@ func processEntry(config *processEntryConfig) error {
 	return nil
 }
 
-func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string, logger *log.Logger) {
+func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) {
 	evt.Subjects["userID"] = common.UnknownUser
 	ed, ederr := extraDataWithoutCA(alg, keySum)
 	if ederr != nil {
-		logger.Printf("failed to create extra data for login event: %s", ederr)
+		Logger.Errorf("failed to create extra data for login event: %s", ederr)
 	} else {
 		evt.WithData(ed)
 	}
@@ -99,7 +106,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string, 
 func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		config.logger.Println("got login entry with no matches for identifiers")
+		Logger.Infoln("got login entry with no matches for identifiers")
 		return nil
 	}
 
@@ -132,8 +139,8 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	evt.LoggedAt = config.when
 
 	if len(config.logEntry) == len(matches[0]) {
-		config.logger.Println("got login entry with no matches for certificate identifiers")
-		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx], config.logger)
+		Logger.Infoln("got login entry with no matches for certificate identifiers")
+		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
@@ -146,8 +153,8 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	if idMatches == nil {
-		config.logger.Println("got login entry with no matches for certificate identifiers")
-		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx], config.logger)
+		Logger.Infoln("got login entry with no matches for certificate identifiers")
+		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
@@ -164,7 +171,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataWithCA(matches[algIdx], matches[keyIdx], idMatches[serialIdx], idMatches[caIdx])
 	if ederr != nil {
-		config.logger.Printf("failed to create extra data for login event - %s", ederr)
+		Logger.Errorf("failed to create extra data for login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -222,7 +229,7 @@ func processCertificateInvalidEntry(config *processEntryConfig) error {
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {
-		config.logger.Printf("failed to create extra data for invalid cert login event - %s", ederr)
+		Logger.Errorf("failed to create extra data for invalid cert login event - %s", ederr)
 	} else {
 		evt = evt.WithData(ed)
 	}
@@ -249,7 +256,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 func processNotInAllowUsersEntry(config *processEntryConfig) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		config.logger.Println("got login entry with no matches for not-in-allow-users")
+		Logger.Infoln("got login entry with no matches for not-in-allow-users")
 		return nil
 	}
 
@@ -287,7 +294,7 @@ func processNotInAllowUsersEntry(config *processEntryConfig) error {
 func processInvalidUserEntry(config *processEntryConfig) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
-		config.logger.Println("got login entry with no matches for invalid-user")
+		Logger.Infoln("got login entry with no matches for invalid-user")
 		return nil
 	}
 

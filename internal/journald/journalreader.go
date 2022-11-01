@@ -6,7 +6,6 @@ package journald
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
@@ -23,7 +22,7 @@ type journalReaderImpl struct {
 	journal *sdjournal.Journal
 }
 
-func newJournalReader(bootID string, distro util.DistroType, logger *log.Logger) (JournalReader, error) {
+func newJournalReader(bootID string, distro util.DistroType) (JournalReader, error) {
 	j, err := sdjournal.NewJournal()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open journal: %w", err)
@@ -55,7 +54,7 @@ func newJournalReader(bootID string, distro util.DistroType, logger *log.Logger)
 		return nil, fmt.Errorf("failed to add ssh match: %w", err)
 	}
 
-	logger.Printf("distro: '%s' | boot id: '%s'", distro, bootID)
+	Logger.Infof("distro: '%s' | boot id: '%s'", distro, bootID)
 
 	// NOTE(jaosorior): We only care about the current boot
 	matchBootID := sdjournal.Match{
@@ -71,12 +70,12 @@ func newJournalReader(bootID string, distro util.DistroType, logger *log.Logger)
 	// Attempt to get the last read position from the journal.
 	lastRead, reason := common.GetLastRead()
 	if lastRead == 0 {
-		logger.Printf("no last read position found, "+
+		Logger.Infof("no last read position found, "+
 			"reading from the beginning (reason: '%s')", reason)
 	} else {
-		logger.Printf("last read position: %d", lastRead)
+		Logger.Infof("last read position: %d", lastRead)
 		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
-			logger.Printf("failed to seek to last read position, "+
+			Logger.Errorf("failed to seek to last read position, "+
 				"attempting to continue anyway (err: '%s')", err)
 		}
 	}

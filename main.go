@@ -11,6 +11,7 @@ import (
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
@@ -57,7 +58,19 @@ func mainWithErr() error {
 		return fmt.Errorf("fatal: failed to open audit log file: %w", auditfileerr)
 	}
 
-	log.Println("Starting workers...")
+	logger, err := zap.NewProduction()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = logger.Sync() //nolint
+	}()
+
+	sugar := logger.Sugar()
+	journald.Logger = sugar
+
+	sugar.Infoln("starting workers...")
 
 	eg.Go(func() error {
 		jp := journald.Processor{
@@ -74,7 +87,7 @@ func mainWithErr() error {
 		return fmt.Errorf("fatal: error while waiting for workers: %w", err)
 	}
 
-	log.Println("All workers finished")
+	sugar.Infoln("all workers finished")
 
 	return err
 }

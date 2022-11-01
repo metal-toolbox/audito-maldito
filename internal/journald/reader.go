@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
@@ -26,27 +25,18 @@ type Processor struct {
 	Distro    util.DistroType
 	EventW    *auditevent.EventWriter
 	jr        JournalReader
-	l         *log.Logger
 }
 
 func (jp *Processor) getJournalReader() JournalReader {
 	return jp.jr
 }
 
-func (jp *Processor) configureLogger() {
-	jp.l = log.Default()
-	jp.l.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	jp.l.SetPrefix("journald-processor: ")
-}
-
 // ProcessJournal reads the journal and sends the events to the EventWriter.
 func (jp *Processor) Read(ctx context.Context) error {
 	var currentRead uint64
 
-	jp.configureLogger()
-
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.l)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
 	if err != nil {
 		return err
 	}
@@ -57,12 +47,12 @@ func (jp *Processor) Read(ctx context.Context) error {
 		}
 	}()
 
-	defer flushLastRead(jp.l, &currentRead)
+	defer flushLastRead(&currentRead)
 
 	for {
 		select {
 		case <-ctx.Done():
-			jp.l.Printf("Exiting because context is done: %v", ctx.Err())
+			Logger.Infof("Exiting because context is done: %v", ctx.Err())
 			return nil
 		default:
 			if err := jp.readEntry(&currentRead); err != nil {
@@ -81,8 +71,8 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 	if nextErr != nil {
 		if errors.Is(nextErr, io.EOF) {
 			if r := j.Wait(defaultSleep); r < 0 {
-				flushLastRead(jp.l, currentRead)
-				jp.l.Printf("wait failed after calling next, reinitializing (error-code: %d)", r)
+				flushLastRead(currentRead)
+				Logger.Infof("wait failed after calling next, reinitializing (error-code: %d)", r)
 				time.Sleep(defaultSleep)
 
 				if err := jp.resetJournal(); err != nil {
@@ -94,7 +84,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		}
 
 		if closeErr := j.Close(); closeErr != nil {
-			jp.l.Printf("failed to close journal: %v", closeErr)
+			Logger.Errorf("failed to close journal: %v", closeErr)
 		}
 
 		return fmt.Errorf("failed to read next journal entry: %w", nextErr)
@@ -102,8 +92,8 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	if isNewFile == 0 {
 		if r := j.Wait(defaultSleep); r < 0 {
-			flushLastRead(jp.l, currentRead)
-			jp.l.Printf("wait failed after checking for new journal file, "+
+			flushLastRead(currentRead)
+			Logger.Errorf("wait failed after checking for new journal file, "+
 				"reinitializing. error-code: %d", r)
 			time.Sleep(defaultSleep)
 
@@ -116,13 +106,13 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	entry, geErr := j.GetEntry()
 	if geErr != nil {
-		jp.l.Printf("Error getting entry: %v", geErr)
+		Logger.Errorf("Error getting entry: %v", geErr)
 		return ErrNonFatal
 	}
 
 	entryMsg, hasMessage := entry.GetMessage()
 	if !hasMessage {
-		jp.l.Println("Got entry with no MESSAGE")
+		Logger.Error("Got entry with no MESSAGE")
 		return ErrNonFatal
 	}
 
@@ -137,7 +127,6 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 		when:      ts,
 		pid:       entry.GetPID(),
 		eventW:    jp.EventW,
-		logger:    jp.l,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)
@@ -148,11 +137,11 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 func (jp *Processor) resetJournal() error {
 	if err := jp.jr.Close(); err != nil {
-		jp.l.Printf("failed to close journal: %v", err)
+		Logger.Errorf("failed to close journal: %v", err)
 	}
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.l)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
 	if err != nil {
 		return fmt.Errorf("failed to reset journal: %w", err)
 	}

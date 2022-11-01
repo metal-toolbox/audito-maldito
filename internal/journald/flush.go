@@ -2,7 +2,6 @@ package journald
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync/atomic"
 	"time"
@@ -20,13 +19,13 @@ const (
 // Note we don't fail if we can't write the file nor read the directory
 // as we intend to go through the defer statements and exit.
 // If this fails, we will just start reading from the beginning of the journal.
-func flushLastRead(l *log.Logger, lastReadToFlush *uint64) {
+func flushLastRead(lastReadToFlush *uint64) {
 	lastRead := atomic.LoadUint64(lastReadToFlush)
 
-	l.Printf("Flushing last read timestamp %d", lastRead)
+	Logger.Infof("Flushing last read timestamp %d", lastRead)
 
 	if err := common.EnsureFlushDirectory(); err != nil {
-		l.Printf("Failed to ensure flush directory: %v", err)
+		Logger.Errorf("Failed to ensure flush directory: %v", err)
 		return
 	}
 
@@ -35,6 +34,6 @@ func flushLastRead(l *log.Logger, lastReadToFlush *uint64) {
 	// or by truncating an existing file.
 	err := os.WriteFile(common.TimeFlushPath, []byte(fmt.Sprintf("%d", lastRead)), onlyUserReadable)
 	if err != nil {
-		l.Printf("failed to write flush file: %s", err)
+		Logger.Errorf("failed to write flush file: %s", err)
 	}
 }

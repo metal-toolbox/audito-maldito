@@ -1,7 +1,6 @@
 package journald
 
 import (
-	"log"
 	"testing"
 	"time"
 
@@ -278,7 +277,6 @@ func TestEntryProcessing(t *testing.T) {
 				when:      expectedts,
 				pid:       tt.args.pid,
 				eventW:    w,
-				logger:    log.Default(),
 			})
 			assert.NoError(t, err)
 
