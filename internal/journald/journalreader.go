@@ -10,7 +10,6 @@ import (
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
 
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -22,7 +21,7 @@ type journalReaderImpl struct {
 	journal *sdjournal.Journal
 }
 
-func newJournalReader(bootID string, distro util.DistroType) (JournalReader, error) {
+func newJournalReader(bootID string, distro util.DistroType, optSeekToTS uint64) (JournalReader, error) {
 	j, err := sdjournal.NewJournal()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open journal: %w", err)
@@ -67,16 +66,14 @@ func newJournalReader(bootID string, distro util.DistroType) (JournalReader, err
 		return nil, fmt.Errorf("failed to add boot id match: %w", err)
 	}
 
-	// Attempt to get the last read position from the journal.
-	lastRead, reason := common.GetLastRead()
-	if lastRead == 0 {
-		logger.Infof("no last read position found, "+
-			"reading from the beginning (reason: '%s')", reason)
-	} else {
-		logger.Infof("last read position: %d", lastRead)
-		if err := j.SeekRealtimeUsec(lastRead + 1); err != nil {
-			logger.Errorf("failed to seek to last read position, "+
-				"attempting to continue anyway (err: '%s')", err)
+	if optSeekToTS > 0 {
+		next := optSeekToTS + 1
+
+		logger.Infof("seeking journal to realtime usec '%d'...", next)
+
+		if err := j.SeekRealtimeUsec(next); err != nil {
+			logger.Errorf("failed to seek journal to '%d' - "+
+				"attempting to continue anyway (err: '%s')", next, err)
 		}
 	}
 

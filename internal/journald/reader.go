@@ -11,6 +11,7 @@ import (
 
 	"github.com/metal-toolbox/auditevent"
 
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -24,6 +25,7 @@ type Processor struct {
 	NodeName  string
 	Distro    util.DistroType
 	EventW    *auditevent.EventWriter
+	currentTS uint64
 	jr        JournalReader
 }
 
@@ -33,10 +35,19 @@ func (jp *Processor) getJournalReader() JournalReader {
 
 // ProcessJournal reads the journal and sends the events to the EventWriter.
 func (jp *Processor) Read(ctx context.Context) error {
-	var currentRead uint64
+	// TODO: Do we need to store this value on a per-service basis?
+	//  I don't think so... but we should answer that question :)
+	lastRead, reason := common.GetLastRead()
+	if lastRead == 0 {
+		logger.Infof("no last read timestamp found for journal - "+
+			"reading from the beginning (reason: '%s')", reason)
+	} else {
+		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
+		jp.currentTS = lastRead
+	}
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, lastRead)
 	if err != nil {
 		return err
 	}
@@ -47,7 +58,18 @@ func (jp *Processor) Read(ctx context.Context) error {
 		}
 	}()
 
-	defer flushLastRead(&currentRead)
+	defer func() {
+		// Using an anonymous function here allows us to save the
+		// current value of currentTS. Using "defer(flushLastRead(...))"
+		// results in the deferred function receiving an out-of-date
+		// copy of the value.
+		//
+		// This can be simplified by making flushLastRead a method
+		// on Processor... but the tradeoff between exposing all the
+		// struct's fields to such a simple function is making me
+		// second guess that.
+		flushLastRead(jp.currentTS)
+	}()
 
 	for {
 		select {
@@ -55,7 +77,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 			logger.Infof("Exiting because context is done: %v", ctx.Err())
 			return nil
 		default:
-			if err := jp.readEntry(&currentRead); err != nil {
+			if err := jp.readEntry(); err != nil {
 				if errors.Is(err, ErrNonFatal) {
 					continue
 				}
@@ -65,13 +87,14 @@ func (jp *Processor) Read(ctx context.Context) error {
 	}
 }
 
-func (jp *Processor) readEntry(currentRead *uint64) error {
+func (jp *Processor) readEntry() error {
 	j := jp.getJournalReader()
 	isNewFile, nextErr := j.Next()
 	if nextErr != nil {
 		if errors.Is(nextErr, io.EOF) {
 			if r := j.Wait(defaultSleep); r < 0 {
-				flushLastRead(currentRead)
+				flushLastRead(jp.currentTS)
+
 				logger.Infof("wait failed after calling next, reinitializing (error-code: %d)", r)
 				time.Sleep(defaultSleep)
 
@@ -92,7 +115,8 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	if isNewFile == 0 {
 		if r := j.Wait(defaultSleep); r < 0 {
-			flushLastRead(currentRead)
+			flushLastRead(jp.currentTS)
+
 			logger.Errorf("wait failed after checking for new journal file, "+
 				"reinitializing. error-code: %d", r)
 			time.Sleep(defaultSleep)
@@ -101,6 +125,7 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 				return fmt.Errorf("failed to reset journal after wait failed: %w", err)
 			}
 		}
+
 		return nil
 	}
 
@@ -112,19 +137,19 @@ func (jp *Processor) readEntry(currentRead *uint64) error {
 
 	entryMsg, hasMessage := entry.GetMessage()
 	if !hasMessage {
-		logger.Error("Got entry with no MESSAGE")
+		logger.Error("Got entry with no message")
 		return ErrNonFatal
 	}
 
 	// This comes from journald's RealtimeTimestamp field.
 	usec := entry.GetTimeStamp()
-	ts := time.UnixMicro(int64(usec))
+	jp.currentTS = usec
 
 	err := processEntry(&processEntryConfig{
 		logEntry:  entryMsg,
 		nodeName:  jp.NodeName,
 		machineID: jp.MachineID,
-		when:      ts,
+		when:      time.UnixMicro(int64(usec)),
 		pid:       entry.GetPID(),
 		eventW:    jp.EventW,
 	})
@@ -141,9 +166,10 @@ func (jp *Processor) resetJournal() error {
 	}
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.currentTS)
 	if err != nil {
 		return fmt.Errorf("failed to reset journal: %w", err)
 	}
+
 	return nil
 }

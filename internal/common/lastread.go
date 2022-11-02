@@ -46,7 +46,7 @@ func doGetLastRead(path string) (timestampUnix uint64, info string) {
 		return 0, err.Error()
 	}
 
-	return lastRead, ""
+	return lastRead, "file contains a value of zero"
 }
 
 // EnsureFlushDirectory ensures that the directory where we store the
