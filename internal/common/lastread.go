@@ -19,34 +19,27 @@ const (
 	flushDirPerms = 0o750
 )
 
-// GetLastRead attempts to read the last-read timestamp saved by this
-// application. This allows the application to start reading from
-// wherever it left off previously.
-//
-// A value of 0 is returned if the timestamp file cannot be read
-// or parsed.
-//
-// The returned string is non-empty if an error occurred trying to
-// read or parse the file. Such scenarios are considered non-fatal.
-// The error string is provided for informational purposes.
-func GetLastRead() (timestampUnix uint64, info string) {
+// GetLastRead attempts to read the last-read journal timestamp saved
+// by this application. This allows the application to start reading
+// from wherever it left off previously.
+func GetLastRead() (timestampUnix uint64, err error) {
 	return doGetLastRead(TimeFlushPath)
 }
 
-func doGetLastRead(path string) (timestampUnix uint64, info string) {
+func doGetLastRead(path string) (timestampUnix uint64, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, err.Error()
+		return 0, err
 	}
 	defer f.Close()
 
 	var lastRead uint64
 	_, err = fmt.Fscanf(f, "%d", &lastRead)
 	if err != nil {
-		return 0, err.Error()
+		return 0, err
 	}
 
-	return lastRead, "file contains a value of zero"
+	return lastRead, nil
 }
 
 // EnsureFlushDirectory ensures that the directory where we store the

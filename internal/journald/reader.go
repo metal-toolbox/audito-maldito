@@ -37,16 +37,16 @@ func (jp *Processor) getJournalReader() JournalReader {
 func (jp *Processor) Read(ctx context.Context) error {
 	// TODO: Do we need to store this value on a per-service basis?
 	//  I don't think so... but we should answer that question :)
-	lastRead, reason := common.GetLastRead()
-	if lastRead == 0 {
+	lastRead, err := common.GetLastRead()
+	if err != nil {
 		logger.Infof("no last read timestamp found for journal - "+
-			"reading from the beginning (reason: '%s')", reason)
+			"reading from the beginning (reason: '%s')", err.Error())
+		jp.currentTS = 0
 	} else {
 		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
 		jp.currentTS = lastRead
 	}
 
-	var err error
 	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, lastRead)
 	if err != nil {
 		return err
