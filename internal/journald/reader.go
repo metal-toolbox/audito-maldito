@@ -74,7 +74,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Infof("Exiting because context is done: %v", ctx.Err())
+			logger.Infof("exiting because context is done: %v", ctx.Err())
 			return nil
 		default:
 			if err := jp.readEntry(); err != nil {
@@ -131,13 +131,13 @@ func (jp *Processor) readEntry() error {
 
 	entry, geErr := j.GetEntry()
 	if geErr != nil {
-		logger.Errorf("Error getting entry: %v", geErr)
+		logger.Errorf("error getting entry: %v", geErr)
 		return ErrNonFatal
 	}
 
 	entryMsg, hasMessage := entry.GetMessage()
 	if !hasMessage {
-		logger.Error("Got entry with no message")
+		logger.Error("got entry with no message")
 		return ErrNonFatal
 	}
 

@@ -19,10 +19,10 @@ const (
 // as we intend to go through the defer statements and exit.
 // If this fails, we will just start reading from the beginning of the journal.
 func flushLastRead(lastReadTimestamp uint64) {
-	logger.Infof("Flushing last read timestamp %d", lastReadTimestamp)
+	logger.Infof("flushing last read timestamp %d", lastReadTimestamp)
 
 	if err := common.EnsureFlushDirectory(); err != nil {
-		logger.Errorf("Failed to ensure flush directory: %v", err)
+		logger.Errorf("failed to ensure flush directory: %v", err)
 		return
 	}
 
