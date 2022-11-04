@@ -15,6 +15,8 @@ func Test_DoGetLastRead(t *testing.T) {
 	tmpdir := t.TempDir()
 
 	t.Run("InvalidFile", func(t *testing.T) {
+		t.Parallel()
+
 		fPath := filepath.Join(tmpdir, "never gonna give you up")
 
 		_, err := doGetLastRead(fPath)
@@ -22,6 +24,8 @@ func Test_DoGetLastRead(t *testing.T) {
 	})
 
 	t.Run("EmptyFile", func(t *testing.T) {
+		t.Parallel()
+
 		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
 
 		err := os.WriteFile(fPath, []byte{}, 0o600)
@@ -32,6 +36,8 @@ func Test_DoGetLastRead(t *testing.T) {
 	})
 
 	t.Run("NotAnInt", func(t *testing.T) {
+		t.Parallel()
+
 		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
 
 		err := os.WriteFile(fPath, []byte{0x41, 0x41, 0x41, 0x41, 0x0a}, 0o600)
@@ -42,6 +48,8 @@ func Test_DoGetLastRead(t *testing.T) {
 	})
 
 	t.Run("ValidInt", func(t *testing.T) {
+		t.Parallel()
+
 		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
 
 		var exp uint64 = 123
