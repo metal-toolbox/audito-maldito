@@ -52,7 +52,7 @@ func Test_DoGetLastRead(t *testing.T) {
 
 		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
 
-		var exp uint64 = 123
+		var exp uint64 = 1666371243954575
 
 		err := os.WriteFile(fPath, []byte(strconv.Itoa(int(exp))), 0o600)
 		assert.NoError(t, err)
