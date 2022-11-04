@@ -25,7 +25,7 @@ type Processor struct {
 	NodeName  string
 	Distro    util.DistroType
 	EventW    *auditevent.EventWriter
-	currentTS uint64
+	currentTS uint64 // Microseconds since unix epoch.
 	jr        JournalReader
 }
 
@@ -38,16 +38,24 @@ func (jp *Processor) Read(ctx context.Context) error {
 	// TODO: Do we need to store this value on a per-service basis?
 	//  I don't think so... but we should answer that question :)
 	lastRead, err := common.GetLastRead()
-	if err != nil {
-		logger.Infof("no last read timestamp found for journal - "+
-			"reading from the beginning (reason: '%s')", err.Error())
-		jp.currentTS = 0
-	} else {
-		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
+	switch {
+	case err != nil:
+		jp.currentTS = uint64(time.Now().UnixMicro())
+
+		logger.Warnf("failed to read last read timestamp for journal - "+
+			"reading from current time (reason: '%s')", err.Error())
+	case lastRead == 0:
+		jp.currentTS = uint64(time.Now().UnixMicro())
+
+		logger.Info("last read timestamp for journal is zero - " +
+			"reading from current time")
+	default:
 		jp.currentTS = lastRead
+
+		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
 	}
 
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, lastRead)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.currentTS)
 	if err != nil {
 		return err
 	}
@@ -141,7 +149,6 @@ func (jp *Processor) readEntry() error {
 		return ErrNonFatal
 	}
 
-	// This comes from journald's RealtimeTimestamp field.
 	usec := entry.GetTimeStamp()
 	jp.currentTS = usec
 

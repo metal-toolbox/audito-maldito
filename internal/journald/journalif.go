@@ -4,7 +4,20 @@ import "time"
 
 type JournalEntry interface {
 	GetMessage() (string, bool)
+
+	// GetTimeStamp returns the wallclock time in microseconds
+	// (since epoch) that the entry occurred at.
+	//
+	// From the systemd documentation for "__REALTIME_TIMESTAMP":
+	//
+	//   "The wallclock time (CLOCK_REALTIME) at the point in time
+	//   the entry was received by the journal, in microseconds
+	//   since the epoch UTC, formatted as a decimal string."
+	//
+	// Refer to the following documentation for more information:
+	// https://www.freedesktop.org/software/systemd/man/systemd.journal-fields.html
 	GetTimeStamp() uint64
+
 	GetPID() string
 }
 
