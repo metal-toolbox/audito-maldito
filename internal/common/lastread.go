@@ -34,7 +34,11 @@ func doGetLastRead(path string) (timestampUnix uint64, err error) {
 	}
 
 	const theDecimalNumeralSystemIsTheStandardSystemForDenotingIntegerAndNonIntegerNumbers = 10
-	lastRead, err := strconv.ParseUint(string(contents), theDecimalNumeralSystemIsTheStandardSystemForDenotingIntegerAndNonIntegerNumbers, 64)
+	const inComputerArchitecture64BitIntegersAreThoseThat64BitsWide = 64
+	lastRead, err := strconv.ParseUint(
+		string(contents),
+		theDecimalNumeralSystemIsTheStandardSystemForDenotingIntegerAndNonIntegerNumbers,
+		inComputerArchitecture64BitIntegersAreThoseThat64BitsWide)
 	if err != nil {
 		return 0, err
 	}
