@@ -3,6 +3,7 @@ package common
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,50 +14,44 @@ func Test_DoGetLastRead(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	type args struct {
-		contents string
-	}
-	tests := []struct {
-		name string
-		args args
-		want uint64
-	}{
-		{
-			name: "empty file",
-			args: args{
-				contents: "",
-			},
-			want: 0,
-		},
-		{
-			name: "invalid file",
-			args: args{
-				contents: "invalid",
-			},
-			want: 0,
-		},
-		{
-			name: "valid file",
-			args: args{
-				contents: "123",
-			},
-			want: 123,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			path := filepath.Join(tmpdir, tt.name)
-			f, err := os.Create(path)
-			assert.NoError(t, err)
+	t.Run("InvalidFile", func(t *testing.T) {
+		fPath := filepath.Join(tmpdir, "never gonna give you up")
 
-			_, err = f.WriteString(tt.args.contents)
-			assert.NoError(t, err)
+		_, err := doGetLastRead(fPath)
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
 
-			if got, _ := doGetLastRead(path); got != tt.want {
-				t.Errorf("doGetLastRead() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("EmptyFile", func(t *testing.T) {
+		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
+
+		err := os.WriteFile(fPath, []byte{}, 0o600)
+		assert.NoError(t, err)
+
+		_, err = doGetLastRead(fPath)
+		assert.ErrorIs(t, err, strconv.ErrSyntax)
+	})
+
+	t.Run("NotAnInt", func(t *testing.T) {
+		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
+
+		err := os.WriteFile(fPath, []byte{0x41, 0x41, 0x41, 0x41, 0x0a}, 0o600)
+		assert.NoError(t, err)
+
+		_, err = doGetLastRead(fPath)
+		assert.ErrorIs(t, err, strconv.ErrSyntax)
+	})
+
+	t.Run("ValidInt", func(t *testing.T) {
+		fPath := filepath.Join(tmpdir, filepath.Base(t.Name()))
+
+		var exp uint64 = 123
+
+		err := os.WriteFile(fPath, []byte(strconv.Itoa(int(exp))), 0o600)
+		assert.NoError(t, err)
+
+		i, err := doGetLastRead(fPath)
+		assert.NoError(t, err)
+
+		assert.Equal(t, exp, i)
+	})
 }

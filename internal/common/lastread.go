@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 const (
@@ -27,14 +28,12 @@ func GetLastRead() (timestampUnix uint64, err error) {
 }
 
 func doGetLastRead(path string) (timestampUnix uint64, err error) {
-	f, err := os.Open(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
 
-	var lastRead uint64
-	_, err = fmt.Fscanf(f, "%d", &lastRead)
+	lastRead, err := strconv.ParseUint(string(contents), 10, 64)
 	if err != nil {
 		return 0, err
 	}
