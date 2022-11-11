@@ -1,6 +1,7 @@
 package journald
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -62,6 +63,8 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 }
 
 type processEntryConfig struct {
+	ctx       context.Context
+	logins    chan<- common.RemoteUserLogin
 	logEntry  string
 	nodeName  string
 	machineID string
@@ -137,6 +140,8 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	evt.LoggedAt = config.when
 
 	if len(config.logEntry) == len(matches[0]) {
+		// TODO: This log message is incorrect... but I am not sure
+		//  what this logic is trying to accomplish.
 		logger.Infoln("got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
@@ -165,7 +170,8 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	serialIdx := certIDRE.SubexpIndex(idxCertSerial)
 	caIdx := certIDRE.SubexpIndex(idxCertCA)
 
-	evt.Subjects["userID"] = idMatches[userIdx]
+	usernameFromCert := idMatches[userIdx]
+	evt.Subjects["userID"] = usernameFromCert
 
 	ed, ederr := extraDataWithCA(matches[algIdx], matches[keyIdx], idMatches[serialIdx], idMatches[caIdx])
 	if ederr != nil {
@@ -180,7 +186,16 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		return fmt.Errorf("failed to write event: %w", err)
 	}
 
-	return nil
+	select {
+	case <-config.ctx.Done():
+		return nil
+	case config.logins <- common.RemoteUserLogin{
+		Source:     evt,
+		PID:        config.pid,
+		CredUserID: usernameFromCert,
+	}:
+		return nil
+	}
 }
 
 func getCertificateInvalidReason(logentry string) string {

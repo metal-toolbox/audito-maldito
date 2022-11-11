@@ -25,6 +25,7 @@ type Processor struct {
 	NodeName  string
 	Distro    util.DistroType
 	EventW    *auditevent.EventWriter
+	Logins    chan<- common.RemoteUserLogin
 	currentTS uint64 // Microseconds since unix epoch.
 	jr        JournalReader
 }
@@ -85,7 +86,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 			logger.Infof("exiting because context is done: %v", ctx.Err())
 			return nil
 		default:
-			if err := jp.readEntry(); err != nil {
+			if err := jp.readEntry(ctx); err != nil {
 				if errors.Is(err, ErrNonFatal) {
 					continue
 				}
@@ -95,7 +96,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 	}
 }
 
-func (jp *Processor) readEntry() error {
+func (jp *Processor) readEntry(ctx context.Context) error {
 	j := jp.getJournalReader()
 	isNewFile, nextErr := j.Next()
 	if nextErr != nil {
@@ -153,6 +154,8 @@ func (jp *Processor) readEntry() error {
 	jp.currentTS = usec
 
 	err := processEntry(&processEntryConfig{
+		ctx:       ctx,
+		logins:    jp.Logins,
 		logEntry:  entryMsg,
 		nodeName:  jp.NodeName,
 		machineID: jp.MachineID,
