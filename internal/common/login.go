@@ -3,8 +3,32 @@ package common
 import "github.com/metal-toolbox/auditevent"
 
 type RemoteUserLogin struct {
-	Source *auditevent.AuditEvent
-	// TODO: Talk to Ozz about parsing this to an int earlier in the code.
-	PID        string
+	Source     *auditevent.AuditEvent
+	PID        int
 	CredUserID string
+}
+
+func (o RemoteUserLogin) Validate() error {
+	if o.Source == nil {
+		return &remoteUserLoginValidateError{
+			noEvent: true,
+			message: "audit event is nil",
+		}
+	}
+
+	if o.PID == 0 {
+		return &remoteUserLoginValidateError{
+			noPID:   true,
+			message: "pid is zero",
+		}
+	}
+
+	if o.CredUserID == "" {
+		return &remoteUserLoginValidateError{
+			noCred:  true,
+			message: "user id is empty",
+		}
+	}
+
+	return nil
 }

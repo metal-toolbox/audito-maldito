@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,6 +112,13 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		return nil
 	}
 
+	pid, err := strconv.Atoi(config.pid)
+	if err != nil {
+		logger.Errorf("failed to convert pid string to int ('%s') - %w",
+			config.pid, err)
+		return nil
+	}
+
 	usrIdx := loginRE.SubexpIndex(idxLoginUserName)
 	sourceIdx := loginRE.SubexpIndex(idxLoginSource)
 	portIdx := loginRE.SubexpIndex(idxLoginPort)
@@ -191,7 +199,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		return nil
 	case config.logins <- common.RemoteUserLogin{
 		Source:     evt,
-		PID:        config.pid,
+		PID:        pid,
 		CredUserID: usernameFromCert,
 	}:
 		return nil

@@ -195,21 +195,20 @@ type auditdEventer struct {
 }
 
 func (o *auditdEventer) remoteLogin(login common.RemoteUserLogin) error {
-	pid, err := strconv.Atoi(login.PID)
+	err := login.Validate()
 	if err != nil {
-		logger.Errorf("failed to convert remote user login pid '%s' to int - %s",
-			login.PID, err)
-		return nil
+		return fmt.Errorf("failed to validate remote user login - %w", err)
 	}
 
-	_, hasIt := o.pidsToRULs[pid]
+	_, hasIt := o.pidsToRULs[login.PID]
 	if hasIt {
-		logger.Warnf("got a remote user login with a pid that already exists in the map (%d)", pid)
+		logger.Warnf("got a remote user login with a pid that already exists in the map (%d)",
+			login.PID)
 	}
 
-	existingSessionID, hasSession := o.pidsToSessIDs[pid]
+	existingSessionID, hasSession := o.pidsToSessIDs[login.PID]
 	if hasSession {
-		delete(o.pidsToSessIDs, pid)
+		delete(o.pidsToSessIDs, login.PID)
 
 		u := user{
 			login: login,
@@ -224,7 +223,7 @@ func (o *auditdEventer) remoteLogin(login common.RemoteUserLogin) error {
 			return writeCachedUserEvents(o.eventWriter, u, cache.aucoalesceEvents)
 		}
 	} else {
-		o.pidsToRULs[pid] = login
+		o.pidsToRULs[login.PID] = login
 	}
 
 	return nil
