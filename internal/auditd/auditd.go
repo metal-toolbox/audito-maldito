@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"time"
 
@@ -32,7 +33,7 @@ type Auditd struct {
 
 // TODO: Should this code close the auditd reader on behalf of the caller?
 func (o *Auditd) Read(ctx context.Context) error {
-	const maxEventsInFlight = 5
+	const maxEventsInFlight = 1000
 	const eventTimeout = 2 * time.Second
 	auditdEvents := make(chan []*auparse.AuditMessage)
 
@@ -258,10 +259,14 @@ func (o *auditdEventer) handleAuditdEvent(event *aucoalesce.Event) error {
 
 	switch event.Type {
 	case auparse.AUDIT_USER_START:
+		log.Printf("TODO: user start")
 		return o.auditdLogin(event)
 	case auparse.AUDIT_USER_END:
+		log.Printf("TODO: user end")
 		return o.auditdLogout(event)
 	default:
+		log.Printf("TODO: other event - %s", event.Summary)
+
 		u, loggedIn := o.sessIDsToUsers[event.Session]
 		if loggedIn {
 			return o.eventWriter.Write(userActionAuditEvent(u, event))
