@@ -115,7 +115,18 @@ func processAuditdEvents(r io.Reader, reass *libaudit.Reassembler) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
-		auditMsg, err := auparse.ParseLogLine(scanner.Text())
+		line := scanner.Text()
+		if line == "" {
+			// Parsing an empty line results in this error:
+			//    invalid audit message header
+			//
+			// I ran into this while writing unit tests,
+			// as several auditd string literal constants
+			// started with a new line.
+			continue
+		}
+
+		auditMsg, err := auparse.ParseLogLine(line)
 		if err != nil {
 			return err
 		}
