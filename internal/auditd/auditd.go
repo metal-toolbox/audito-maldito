@@ -6,17 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strconv"
 	"time"
-
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 
 	"github.com/elastic/go-libaudit/v2"
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
+
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 var logger *zap.SugaredLogger
@@ -75,7 +74,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case err = <-eventProcessorDone:
 			if err != nil {
 				return fmt.Errorf("auditd event processer exited unexpectedly with error - %w", err)
