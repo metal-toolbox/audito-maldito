@@ -273,14 +273,10 @@ func (o *auditdEventer) handleAuditdEvent(event *aucoalesce.Event) error {
 
 	switch event.Type {
 	case auparse.AUDIT_USER_START:
-		log.Printf("TODO: user start")
 		return o.auditdLogin(event)
 	case auparse.AUDIT_USER_END:
-		log.Printf("TODO: user end")
 		return o.auditdLogout(event)
 	default:
-		log.Printf("TODO: other event - %s", event.Summary)
-
 		u, loggedIn := o.sessIDsToUsers[event.Session]
 		if loggedIn {
 			return o.eventWriter.Write(userActionAuditEvent(u, event))
