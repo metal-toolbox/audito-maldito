@@ -1,6 +1,10 @@
 package auditd
 
 const (
+	auditdID = "499"
+
+	auditdNumResultingEvents = 20
+
 	auditdSshdPid = 25007
 
 	auditdLogin = `type=SYSCALL msg=audit(1668460767.736:30162): arch=c000003e syscall=59 success=yes exit=0 a0=557fa8254980 a1=557fa827a720 a2=557fa82549c0 a3=557fa7701780 items=2 ppid=803 pid=25007 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="sshd" exe="/usr/sbin/sshd" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="unset" UID="root" GID="root" EUID="root" SUID="root" FSUID="root" EGID="root" SGID="root" FSGID="root"
@@ -1016,8 +1020,7 @@ type=PATH msg=audit(1668460768.868:30360): item=1 name="/lib64/ld-linux-x86-64.s
 type=PROCTITLE msg=audit(1668460768.868:30360): proctitle=646972636F6C6F7273002D62
 `
 
-	auditdExecLs = `
-type=SYSCALL msg=audit(1668460912.633:30361): arch=c000003e syscall=59 success=yes exit=0 a0=56430ae99960 a1=56430aea8040 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25142 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="ls" exe="/usr/bin/ls" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
+	auditdExecLs = `type=SYSCALL msg=audit(1668460912.633:30361): arch=c000003e syscall=59 success=yes exit=0 a0=56430ae99960 a1=56430aea8040 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25142 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="ls" exe="/usr/bin/ls" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
 type=EXECVE msg=audit(1668460912.633:30361): argc=2 a0="ls" a1="--color=auto"
 type=CWD msg=audit(1668460912.633:30361): cwd="/home/someuser"
 type=PATH msg=audit(1668460912.633:30361): item=0 name="/usr/bin/ls" inode=1442550 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
@@ -1025,8 +1028,7 @@ type=PATH msg=audit(1668460912.633:30361): item=1 name="/lib64/ld-linux-x86-64.s
 type=PROCTITLE msg=audit(1668460912.633:30361): proctitle=6C73002D2D636F6C6F723D6175746F
 `
 
-	auditdExecCatResolvConf = `
-type=SYSCALL msg=audit(1668460935.049:30362): arch=c000003e syscall=59 success=yes exit=0 a0=56430adc1cf0 a1=56430adc7c30 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25143 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="cat" exe="/usr/bin/cat" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
+	auditdExecCatResolvConf = `type=SYSCALL msg=audit(1668460935.049:30362): arch=c000003e syscall=59 success=yes exit=0 a0=56430adc1cf0 a1=56430adc7c30 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25143 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="cat" exe="/usr/bin/cat" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
 type=EXECVE msg=audit(1668460935.049:30362): argc=2 a0="cat" a1="/etc/resolv.conf"
 type=CWD msg=audit(1668460935.049:30362): cwd="/home/someuser"
 type=PATH msg=audit(1668460935.049:30362): item=0 name="/usr/bin/cat" inode=1442317 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
@@ -1034,8 +1036,7 @@ type=PATH msg=audit(1668460935.049:30362): item=1 name="/lib64/ld-linux-x86-64.s
 type=PROCTITLE msg=audit(1668460935.049:30362): proctitle=636174002F6574632F7265736F6C762E636F6E66
 `
 
-	auditdExecLsSlashRoot = `
-type=SYSCALL msg=audit(1668460958.213:30363): arch=c000003e syscall=59 success=yes exit=0 a0=56430aeb9580 a1=56430ae87080 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25145 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="ls" exe="/usr/bin/ls" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
+	auditdExecLsSlashRoot = `type=SYSCALL msg=audit(1668460958.213:30363): arch=c000003e syscall=59 success=yes exit=0 a0=56430aeb9580 a1=56430ae87080 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25145 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="ls" exe="/usr/bin/ls" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
 type=EXECVE msg=audit(1668460958.213:30363): argc=3 a0="ls" a1="--color=auto" a2="/root"
 type=CWD msg=audit(1668460958.213:30363): cwd="/home/someuser"
 type=PATH msg=audit(1668460958.213:30363): item=0 name="/usr/bin/ls" inode=1442550 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
@@ -1043,8 +1044,7 @@ type=PATH msg=audit(1668460958.213:30363): item=1 name="/lib64/ld-linux-x86-64.s
 type=PROCTITLE msg=audit(1668460958.213:30363): proctitle=6C73002D2D636F6C6F723D6175746F002F726F6F74
 `
 
-	auditdLogout = `
-type=SYSCALL msg=audit(1668461061.122:30364): arch=c000003e syscall=59 success=yes exit=0 a0=56430adc8fd0 a1=56430aeb95a0 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25148 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="clear_console" exe="/usr/bin/clear_console" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
+	auditdLogout = `type=SYSCALL msg=audit(1668461061.122:30364): arch=c000003e syscall=59 success=yes exit=0 a0=56430adc8fd0 a1=56430aeb95a0 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25148 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="clear_console" exe="/usr/bin/clear_console" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
 type=EXECVE msg=audit(1668461061.122:30364): argc=2 a0="/usr/bin/clear_console" a1="-q"
 type=CWD msg=audit(1668461061.122:30364): cwd="/home/someuser"
 type=PATH msg=audit(1668461061.122:30364): item=0 name="/usr/bin/clear_console" inode=1442339 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
@@ -1054,8 +1054,7 @@ type=USER_END msg=audit(1668461061.130:30365): pid=25007 uid=0 auid=1000 ses=499
 type=CRED_DISP msg=audit(1668461061.134:30366): pid=25007 uid=0 auid=1000 ses=499 msg='op=PAM:setcred grantors=pam_permit acct="someuser" exe="/usr/sbin/sshd" hostname=10.0.2.2 addr=10.0.2.2 terminal=ssh res=success'UID="root" AUID="someuser"
 `
 
-	auditdUnrelatedData = `
-type=USER_ACCT msg=audit(1668443101.923:29921): pid=24523 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:accounting grantors=pam_permit acct="root" exe="/usr/sbin/cron" hostname=? addr=? terminal=cron res=success'UID="root" AUID="unset"
+	auditdUnrelatedData = `type=USER_ACCT msg=audit(1668443101.923:29921): pid=24523 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:accounting grantors=pam_permit acct="root" exe="/usr/sbin/cron" hostname=? addr=? terminal=cron res=success'UID="root" AUID="unset"
 type=CRED_ACQ msg=audit(1668443101.923:29922): pid=24523 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred grantors=pam_permit,pam_cap acct="root" exe="/usr/sbin/cron" hostname=? addr=? terminal=cron res=success'UID="root" AUID="unset"
 type=LOGIN msg=audit(1668443101.923:29923): pid=24523 uid=0 old-auid=4294967295 auid=0 tty=(none) old-ses=4294967295 ses=468 res=1UID="root" OLD-AUID="unset" AUID="root"
 type=SYSCALL msg=audit(1668443101.923:29923): arch=c000003e syscall=1 success=yes exit=1 a0=7 a1=7ffde6548ed0 a2=1 a3=7f80b1539371 items=0 ppid=729 pid=24523 auid=0 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=468 comm="cron" exe="/usr/sbin/cron" key=(null)ARCH=x86_64 SYSCALL=write AUID="root" UID="root" GID="root" EUID="root" SUID="root" FSUID="root" EGID="root" SGID="root" FSGID="root"
