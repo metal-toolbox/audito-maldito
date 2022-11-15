@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -111,12 +112,14 @@ func mainWithErr() error {
 	})
 
 	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("error while waiting for workers: %w", err)
+		if !errors.Is(err, context.Canceled) {
+			return fmt.Errorf("workers finished with error: %w", err)
+		}
 	}
 
-	logger.Infoln("all workers finished")
+	logger.Infoln("all workers finished without error")
 
-	return err
+	return nil
 }
 
 func main() {
