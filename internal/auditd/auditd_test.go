@@ -42,6 +42,7 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
+			t:      t,
 		}),
 	}
 
@@ -108,12 +109,13 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 type testAuditEncoder struct {
 	ctx    context.Context
 	events chan<- *auditevent.AuditEvent
+	t      *testing.T
 }
 
 func (o testAuditEncoder) Encode(i interface{}) error {
 	event, ok := i.(*auditevent.AuditEvent)
 	if !ok {
-		return fmt.Errorf("failed to type assert event ('%T') as *auditevent.AuditEvent", i)
+		o.t.Fatalf("failed to type assert event ('%T') as *auditevent.AuditEvent", i)
 	}
 
 	select {
