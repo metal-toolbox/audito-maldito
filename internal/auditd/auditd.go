@@ -245,12 +245,11 @@ func (o *auditdEventer) remoteLogin(login common.RemoteUserLogin) error {
 }
 
 func writeCachedUserEvents(writer *auditevent.EventWriter, u user, events []*aucoalesce.Event) error {
-	numEvents := len(events)
-	if numEvents == 0 {
+	if len(events) == 0 {
 		return nil
 	}
 
-	for i := numEvents - 1; i > -1; i-- {
+	for i := range events {
 		err := writer.Write(userActionAuditEvent(u, events[i]))
 		if err != nil {
 			return err
