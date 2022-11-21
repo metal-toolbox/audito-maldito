@@ -1,7 +1,10 @@
 package auditd
 
+//go:generate go run gen-extra-map/main.go -only-ids -d Good -o auditd_good_metadata_test.go testdata/good
+
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -9,12 +12,39 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+)
+
+const (
+	goodAuditdID = "499"
+
+	goodAuditdMaxResultingEvents = 300
+
+	goodAuditdSshdPid = 25007
+)
+
+var (
+	//go:embed testdata/good/00-login.txt
+	goodAuditd00 string
+
+	//go:embed testdata/good/01-ls-cwd.txt
+	goodAuditd01 string
+
+	//go:embed testdata/good/02-cat-resolv-conf.txt
+	goodAuditd02 string
+
+	//go:embed testdata/good/03-ls-slash-root.txt
+	goodAuditd03 string
+
+	//go:embed testdata/good/04-logout.txt
+	goodAuditd04 string
+
+	//go:embed testdata/good/05-unrelated.txt
+	goodAuditd05 string
 )
 
 func TestMain(m *testing.M) {
@@ -28,7 +58,7 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 	defer cancelFn()
 
 	logins := make(chan common.RemoteUserLogin)
-	events := make(chan *auditevent.AuditEvent, auditdNumResultingEvents)
+	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	r, w := io.Pipe()
 	defer func() {
@@ -52,7 +82,7 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 		exited <- a.Read(ctx)
 	}()
 
-	sshLogin := newSshdJournaldAuditEvent("user", auditdSshdPid)
+	sshLogin := newSshdJournaldAuditEvent("user", goodAuditdSshdPid)
 
 	select {
 	case logins <- sshLogin:
@@ -66,19 +96,31 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 		// handle potential scenarios where the writes block.
 		// This allows the context to timeout and the test
 		// to fail.
-		_, err := w.Write([]byte(auditdLogin))
+		_, err := w.Write([]byte(goodAuditd00))
 		if err != nil {
 			writesDone <- err
 			return
 		}
 
-		_, err = w.Write([]byte(auditdExecLs))
+		_, err = w.Write([]byte(goodAuditd01))
 		if err != nil {
 			writesDone <- err
 			return
 		}
 
-		_, err = w.Write([]byte(auditdLogout))
+		_, err = w.Write([]byte(goodAuditd02))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd03))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd04))
 		if err != nil {
 			writesDone <- err
 			return
@@ -96,6 +138,101 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 		}
 	}
 
+	goodChecker := goodAuditdEventsChecker{
+		login:  sshLogin,
+		events: events,
+		exited: exited,
+		t:      t,
+	}
+
+	goodChecker.check()
+}
+
+func TestAuditd_AuditdEventsFirst(t *testing.T) {
+	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFn()
+
+	logins := make(chan common.RemoteUserLogin)
+	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
+
+	r, w := io.Pipe()
+	defer func() {
+		_ = r.Close()
+		_ = w.Close()
+	}()
+
+	a := Auditd{
+		Source: r,
+		Logins: logins,
+		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
+			ctx:    ctx,
+			events: events,
+			t:      t,
+		}),
+	}
+
+	exited := make(chan error, 1)
+
+	go func() {
+		exited <- a.Read(ctx)
+	}()
+
+	writesDone := make(chan error, 1)
+	go func() {
+		// Perform writes in a separate Go routine in order to
+		// handle potential scenarios where the writes block.
+		// This allows the context to timeout and the test
+		// to fail.
+		_, err := w.Write([]byte(goodAuditd00))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd01))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd02))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd03))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd04))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		close(writesDone)
+	}()
+
+	select {
+	case err := <-exited:
+		t.Fatalf("read exited unexpectedly - %v", err)
+	case err := <-writesDone:
+		if err != nil {
+			t.Fatalf("auditd writes failed - %s", err)
+		}
+	}
+
+	sshLogin := newSshdJournaldAuditEvent("user", goodAuditdSshdPid)
+
+	select {
+	case logins <- sshLogin:
+	case err := <-exited:
+		t.Fatalf("read exited unexpectedly while writing remote user login to logins chan - %v", err)
+	}
+
 	checker := goodAuditdEventsChecker{
 		login:  sshLogin,
 		events: events,
@@ -103,7 +240,7 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 		t:      t,
 	}
 
-	checker.checkAuditdEvents()
+	checker.check()
 }
 
 type testAuditEncoder struct {
@@ -128,13 +265,13 @@ func (o testAuditEncoder) Encode(i interface{}) error {
 }
 
 func newSshdJournaldAuditEvent(unixAccountName string, pid int) common.RemoteUserLogin {
-	usernameFromCert := "x"
+	usernameFromCert := "foo@bar.com"
 
 	evt := auditevent.NewAuditEvent(
 		common.ActionLoginIdentifier,
 		auditevent.EventSource{
 			Type:  "IP",
-			Value: "10.0.2.2",
+			Value: "127.0.0.1",
 			Extra: map[string]any{
 				"port": "666",
 			},
@@ -160,8 +297,8 @@ func newSshdJournaldAuditEvent(unixAccountName string, pid int) common.RemoteUse
 	}
 }
 
-// goodAuditdEventsChecker verifies events generated by an Auditd object match
-// the "good" auditd events test data.
+// goodAuditdEventsChecker verifies events generated by an Auditd object
+// match the "good" auditd events test data.
 type goodAuditdEventsChecker struct {
 	// login is the original common.RemoteUserLogin that is
 	// associated with the auditd events.
@@ -179,12 +316,12 @@ type goodAuditdEventsChecker struct {
 	t *testing.T
 }
 
-// checkAuditdEvents reads auditevent.AuditEvent from the events channel
-// and verifies that they match the expected output using the check method.
+// check reads auditevent.AuditEvent from the events channel and verifies
+// that they match the expected output using the checkEvent method.
 //
 // It also monitors the exited channel and fails the current test if
 // any writes occur.
-func (o goodAuditdEventsChecker) checkAuditdEvents() {
+func (o goodAuditdEventsChecker) check() {
 	i := 0
 
 	for {
@@ -192,186 +329,68 @@ func (o goodAuditdEventsChecker) checkAuditdEvents() {
 		case err := <-o.exited:
 			o.t.Fatalf("read exited unexpectedly - %v", err)
 		case event := <-o.events:
-			var extra map[string]interface{}
-
-			switch i {
-			case 0:
-				extra = map[string]interface{}{
-					"action": "acquired-credentials",
-					"how":    "/usr/sbin/sshd",
-					"object": aucoalesce.Object{
-						Type:      "user-session",
-						Primary:   "ssh",
-						Secondary: "10.0.2.2",
-					},
-				}
-			case 1:
-				extra = map[string]interface{}{
-					"action": "logged-in",
-					"how":    "/usr/sbin/sshd",
-					"object": aucoalesce.Object{
-						Type:      "user-session",
-						Primary:   "/dev/pts/3",
-						Secondary: "10.0.2.2",
-					},
-				}
-			case 2:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "bash",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/bin/bash",
-						Secondary: "",
-					},
-				}
-			case 3:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/locale-check",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/locale-check",
-						Secondary: "",
-					},
-				}
-			case 4:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/locale",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/locale",
-						Secondary: "",
-					},
-				}
-			case 5:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/dash",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/lesspipe",
-						Secondary: "",
-					},
-				}
-			case 6:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/basename",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/basename",
-						Secondary: "",
-					},
-				}
-			case 7:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/dirname",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/dirname",
-						Secondary: "",
-					},
-				}
-			case 8:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/dircolors",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/dircolors",
-						Secondary: "",
-					},
-				}
-			case 9:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/ls",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/ls",
-						Secondary: "",
-					},
-				}
-			case 10:
-				extra = map[string]interface{}{
-					"action": "executed",
-					"how":    "/usr/bin/clear_console",
-					"object": aucoalesce.Object{
-						Type:      "file",
-						Primary:   "/usr/bin/clear_console",
-						Secondary: "",
-					},
-				}
-			case 11:
-				extra = map[string]interface{}{
-					"action": "ended-session",
-					"how":    "/usr/sbin/sshd",
-					"object": aucoalesce.Object{
-						Type:      "user-session",
-						Primary:   "ssh",
-						Secondary: "10.0.2.2",
-					},
-				}
-			default:
-				o.t.Fatalf("got unknown event index %d", i)
-			}
-
-			o.check(event, auditevent.EventMetadata{
-				AuditID: auditdID,
-				Extra:   extra,
-			})
-
-			if i == 11 {
+			if i > 200 && event.Metadata.Extra["action"] == "disposed-credentials" {
 				return
 			}
+
+			o.checkEvent(i, event, auditevent.EventMetadata{
+				AuditID: goodAuditdID,
+				Extra:   metadataForGoodAuditdEvents(i, o.t),
+			})
 
 			i++
 		}
 	}
 }
 
-// check verifies that the target auditevent.AuditEvent contains
+// checkEvent verifies that the target auditevent.AuditEvent contains
 // the fields from the original common.RemoteUserLogin stored in
 // the goodAuditdEventsChecker.
-func (o goodAuditdEventsChecker) check(target *auditevent.AuditEvent, meta auditevent.EventMetadata) {
-	assert.NotNilf(o.t, o.login.Source, "remote user login audit event is nil")
+func (o goodAuditdEventsChecker) checkEvent(i int, target *auditevent.AuditEvent, meta auditevent.EventMetadata) {
+	assert.NotNilf(o.t, o.login.Source, "i: %d | remote user login audit event is nil", i)
+	assert.Equal(o.t, common.ActionUserAction, target.Type, "i: %d", i)
 
-	assert.Equal(o.t, common.ActionUserAction, target.Type)
-	assert.Equal(o.t, auditevent.OutcomeSucceeded, target.Outcome)
-	if target.LoggedAt.Equal(time.Time{}) {
-		o.t.Fatal("logged at is equal to empty time.Time")
+	var expResult string
+	switch i {
+	case 0, 4, 5, 6, 19, 20, 21, 24, 25, 26, 147, 149, 150:
+		expResult = auditevent.OutcomeFailed
+	default:
+		expResult = auditevent.OutcomeSucceeded
 	}
 
-	assert.Equal(o.t, "IP", o.login.Source.Source.Type)
-	assert.Equal(o.t, "10.0.2.2", o.login.Source.Source.Value)
-	assert.Equal(o.t, "666", o.login.Source.Source.Extra["port"])
+	assert.Equal(o.t, expResult, target.Outcome, "i: %d", i)
 
-	assert.Equal(o.t, o.login.Source.Subjects["userID"], target.Subjects["userID"])
-	assert.Equal(o.t, o.login.Source.Subjects["loggedAs"], target.Subjects["loggedAs"])
-	assert.Equal(o.t, o.login.Source.Subjects["pid"], target.Subjects["pid"])
+	if target.LoggedAt.Equal(time.Time{}) {
+		o.t.Fatalf("i: %d | logged at is equal to empty time.Time", i)
+	}
 
-	assert.Equal(o.t, o.login.Source.Target["host"], target.Target["host"])
-	assert.Equal(o.t, o.login.Source.Target["machine-id"], target.Target["machine-id"])
+	assert.Equal(o.t, "IP", o.login.Source.Source.Type, "i: %d", i)
+	assert.Equal(o.t, "127.0.0.1", o.login.Source.Source.Value, "i: %d", i)
+	assert.Equal(o.t, "666", o.login.Source.Source.Extra["port"], "i: %d", i)
 
-	assert.Equal(o.t, meta.AuditID, target.Metadata.AuditID)
+	assert.Equal(o.t, o.login.Source.Subjects["userID"], target.Subjects["userID"], "i: %d", i)
+	assert.Equal(o.t, o.login.Source.Subjects["loggedAs"], target.Subjects["loggedAs"], "i: %d", i)
+	assert.Equal(o.t, o.login.Source.Subjects["pid"], target.Subjects["pid"], "i: %d", i)
+
+	assert.Equal(o.t, o.login.Source.Target["host"], target.Target["host"], "i: %d", i)
+	assert.Equal(o.t, o.login.Source.Target["machine-id"], target.Target["machine-id"], "i: %d", i)
+
+	assert.Equal(o.t, meta.AuditID, target.Metadata.AuditID, "i: %d", i)
 
 	if len(meta.Extra) == 0 {
-		o.t.Fatalf("expacted-metadata's extra map is empty")
+		o.t.Fatalf("i: %d | expacted-metadata's extra map is empty", i)
 	}
 
 	if len(target.Metadata.Extra) == 0 {
-		o.t.Fatal("metadata's extra map is empty")
+		o.t.Fatalf("i: %d | metadata's extra map is empty", i)
 	}
 
 	for kExp, vExp := range meta.Extra {
 		something, hasIt := target.Metadata.Extra[kExp]
 		if !hasIt {
-			o.t.Fatalf("metadata is missing key '%s'", kExp)
+			o.t.Fatalf("i: %d | metadata is missing key '%s'", i, kExp)
 		}
 
-		assert.Equal(o.t, vExp, something, fmt.Sprintf("need value: '%v'", vExp))
+		assert.Equal(o.t, vExp, something, fmt.Sprintf("i: %d | need value: '%v'", i, vExp))
 	}
 }

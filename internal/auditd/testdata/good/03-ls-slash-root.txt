@@ -1,0 +1,6 @@
+type=SYSCALL msg=audit(1668460958.213:30363): arch=c000003e syscall=59 success=yes exit=0 a0=56430aeb9580 a1=56430ae87080 a2=56430aef7f30 a3=8 items=2 ppid=25130 pid=25145 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts3 ses=499 comm="ls" exe="/usr/bin/ls" key="operator-commands"ARCH=x86_64 SYSCALL=execve AUID="someuser" UID="someuser" GID="someuser" EUID="someuser" SUID="someuser" FSUID="someuser" EGID="someuser" SGID="someuser" FSGID="someuser"
+type=EXECVE msg=audit(1668460958.213:30363): argc=3 a0="ls" a1="--color=auto" a2="/root"
+type=CWD msg=audit(1668460958.213:30363): cwd="/home/someuser"
+type=PATH msg=audit(1668460958.213:30363): item=0 name="/usr/bin/ls" inode=1442550 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
+type=PATH msg=audit(1668460958.213:30363): item=1 name="/lib64/ld-linux-x86-64.so.2" inode=1448144 dev=fd:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0OUID="root" OGID="root"
+type=PROCTITLE msg=audit(1668460958.213:30363): proctitle=6C73002D2D636F6C6F723D6175746F002F726F6F74
