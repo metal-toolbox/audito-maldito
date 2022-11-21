@@ -73,6 +73,8 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to ensure flush directory: %w", err)
 	}
 
+	// TODO: Handle auditd log file rotations by wrapping the os.File
+	//  with something magic.
 	auditdLog, err := os.Open(auditdLogPath)
 	if err != nil {
 		return fmt.Errorf("failed to open auditd log file at '%s' - %w",

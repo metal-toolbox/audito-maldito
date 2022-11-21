@@ -31,7 +31,11 @@ type Auditd struct {
 }
 
 // TODO: Should this code close the auditd reader on behalf of the caller?
+//
+// TODO: Write documentation about creating a splunk query that shows
+//  only events after a user-start.
 func (o *Auditd) Read(ctx context.Context) error {
+	// TODO: Revisit these settings.
 	const maxEventsInFlight = 1000
 	const eventTimeout = 2 * time.Second
 	auditdEvents := make(chan []*auparse.AuditMessage)
@@ -95,6 +99,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 		case events := <-auditdEvents:
 			// TODO: Maybe CoalesceMessages and ResolveIDs should
 			//  be executed on a different Go routine?
+			// TODO: yes.
 			auditdEvent, err := aucoalesce.CoalesceMessages(events)
 			if err != nil {
 				return fmt.Errorf("failed to coalesce auditd messages - %w", err)
