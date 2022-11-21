@@ -88,13 +88,12 @@ func (o *Auditd) Read(ctx context.Context) error {
 		case <-staleDataTicker.C:
 			aMinuteAgo := time.Now().Add(-time.Minute)
 
-			eventer.deleteCachedSessionsBefore(aMinuteAgo)
+			eventer.deleteUsersWithoutLoginsBefore(aMinuteAgo)
 			eventer.deleteRemoteUserLoginsBefore(aMinuteAgo)
-			eventer.deletePIDsToSessIDsBefore(aMinuteAgo)
 		case remoteLogin := <-o.Logins:
 			err = eventer.remoteLogin(remoteLogin)
 			if err != nil {
-				return fmt.Errorf("failed to add remote user login - %w", err)
+				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
 		case events := <-auditdEvents:
 			// TODO: Maybe CoalesceMessages and ResolveIDs should
@@ -160,11 +159,9 @@ func (s *reassemblerCB) EventsLost(count int) {
 
 func newAuditdEventer(eventWriter *auditevent.EventWriter) *auditdEventer {
 	return &auditdEventer{
-		sessIDsToUsers:  make(map[string]user),
-		sessIDsToEvents: make(map[string]*sessionEventCache),
-		pidsToSessIDs:   make(map[int]sessionIDCache),
-		pidsToRULs:      make(map[int]common.RemoteUserLogin),
-		eventWriter:     eventWriter,
+		sessIDsToUsers: make(map[string]*user),
+		pidsToRULs:     make(map[int]common.RemoteUserLogin),
+		eventWriter:    eventWriter,
 	}
 }
 
@@ -172,29 +169,13 @@ func newAuditdEventer(eventWriter *auditevent.EventWriter) *auditdEventer {
 // allowing us to correlate auditd events back to the credential a user
 // used to authenticate.
 type auditdEventer struct {
-	// sessIDsToUsers contains active auditd sessions that have
-	// been correlated to remote logins.
+	// sessIDsToUsers contains active auditd sessions which may
+	// or may not have a common.RemoteUserLogin associated with
+	// them. It also acts as an auditd event cache.
 	//
 	// The map key is the auditd session ID and the value is
 	// the corresponding user object.
-	sessIDsToUsers map[string]user
-
-	// sessIDsToEvents caches auditd events until a remote user
-	// login occurs.
-	//
-	// The map key is the auditd session ID and the value is
-	// a sessionEventCache.
-	sessIDsToEvents map[string]*sessionEventCache
-
-	// pidsToSessIDs caches the PID of a remote user login
-	// process and its auditd session ID when there is no
-	// corresponding remote user login. This alleviates the
-	// race between process-specific logs and audtid.
-	//
-	// The map key is the PID of a process responsible for
-	// remote user logins and the value is the auditd
-	// sessions ID.
-	pidsToSessIDs map[int]sessionIDCache
+	sessIDsToUsers map[string]*user
 
 	// pidsToRULs caches remote user logins if an auditd
 	// session has not started. This alleviates the race
@@ -214,52 +195,29 @@ type auditdEventer struct {
 	eventWriter *auditevent.EventWriter
 }
 
-func (o *auditdEventer) remoteLogin(login common.RemoteUserLogin) error {
-	err := login.Validate()
+func (o *auditdEventer) remoteLogin(rul common.RemoteUserLogin) error {
+	err := rul.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate remote user login - %w", err)
 	}
 
-	_, hasIt := o.pidsToRULs[login.PID]
+	// Check if there is an auditd session for this login.
+	for _, u := range o.sessIDsToUsers {
+		if u.srcPID == rul.PID {
+			u.hasRUL = true
+			u.login = rul
+
+			return u.writeAndClearCache(o.eventWriter)
+		}
+	}
+
+	_, hasIt := o.pidsToRULs[rul.PID]
 	if hasIt {
 		logger.Warnf("got a remote user login with a pid that already exists in the map (%d)",
-			login.PID)
+			rul.PID)
 	}
 
-	existingSessionID, hasSession := o.pidsToSessIDs[login.PID]
-	if hasSession {
-		delete(o.pidsToSessIDs, login.PID)
-
-		u := user{
-			login: login,
-		}
-
-		o.sessIDsToUsers[existingSessionID.id] = u
-
-		cache, hasCache := o.sessIDsToEvents[existingSessionID.id]
-		if hasCache {
-			delete(o.sessIDsToEvents, existingSessionID.id)
-
-			return writeCachedUserEvents(o.eventWriter, u, cache.aucoalesceEvents)
-		}
-	} else {
-		o.pidsToRULs[login.PID] = login
-	}
-
-	return nil
-}
-
-func writeCachedUserEvents(writer *auditevent.EventWriter, u user, events []*aucoalesce.Event) error {
-	if len(events) == 0 {
-		return nil
-	}
-
-	for i := range events {
-		err := writer.Write(userActionAuditEvent(u, events[i]))
-		if err != nil {
-			return err
-		}
-	}
+	o.pidsToRULs[rul.PID] = rul
 
 	return nil
 }
@@ -275,72 +233,57 @@ func (o *auditdEventer) handleAuditdEvent(event *aucoalesce.Event) error {
 		return nil
 	}
 
-	switch event.Type {
-	case auparse.AUDIT_USER_START:
-		return o.auditdLogin(event)
-	case auparse.AUDIT_USER_END:
-		return o.auditdLogout(event)
-	default:
-		u, loggedIn := o.sessIDsToUsers[event.Session]
-		if loggedIn {
-			return o.eventWriter.Write(userActionAuditEvent(u, event))
-		}
+	u, hasSession := o.sessIDsToUsers[event.Session]
+	if hasSession {
+		if u.hasRUL {
+			// It looks like AUDIT_CRED_DISP indicates the
+			// canonical end of a user session - but, there is
+			// also AUDIT_USER_END, which occurs just before.
+			if event.Type == auparse.AUDIT_CRED_DISP {
+				defer delete(o.sessIDsToUsers, event.Session)
+			}
 
-		cache, hasCache := o.sessIDsToEvents[event.Session]
-		if !hasCache {
-			cache = newSessionEventCache(event.Timestamp)
-		}
+			err := u.writeAndClearCache(o.eventWriter)
+			if err != nil {
+				return err
+			}
 
-		cache.aucoalesceEvents = append(cache.aucoalesceEvents, event)
-
-		if !hasCache {
-			o.sessIDsToEvents[event.Session] = cache
-		}
-
-		return nil
-	}
-}
-
-func (o *auditdEventer) auditdLogin(userStart *aucoalesce.Event) error {
-	pid, err := strconv.Atoi(userStart.Process.PID)
-	if err != nil {
-		logger.Errorf("failed to convert pid string to int from auditd user-start ('%s') - %s",
-			userStart.Process.PID, err)
-		return nil
-	}
-
-	remoteUserLogin, hasIt := o.pidsToRULs[pid]
-	if hasIt {
-		delete(o.pidsToRULs, pid)
-
-		o.sessIDsToUsers[userStart.Session] = user{
-			login: remoteUserLogin,
+			return o.eventWriter.Write(u.toAuditEvent(event))
 		}
 	} else {
-		o.pidsToSessIDs[pid] = sessionIDCache{
-			createdAt: time.Now(),
-			id:        userStart.Session,
+		srcPID, err := strconv.Atoi(event.Process.PID)
+		if err != nil {
+			return fmt.Errorf("failed to parse auditd session init event pid ('%s') - %w",
+				event.Process.PID, err)
+		}
+
+		u = &user{
+			added:  time.Now(),
+			srcPID: srcPID,
+		}
+
+		if rul, hasRUL := o.pidsToRULs[srcPID]; hasRUL {
+			delete(o.pidsToRULs, srcPID)
+
+			u.hasRUL = true
+			u.login = rul
+
+			o.sessIDsToUsers[event.Session] = u
+
+			return o.eventWriter.Write(u.toAuditEvent(event))
 		}
 	}
 
-	return nil
-}
-
-func (o *auditdEventer) auditdLogout(userEnd *aucoalesce.Event) error {
-	u, hasIt := o.sessIDsToUsers[userEnd.Session]
-	if hasIt {
-		delete(o.sessIDsToUsers, userEnd.Session)
-
-		return o.eventWriter.Write(userActionAuditEvent(u, userEnd))
-	}
+	u.cached = append(u.cached, event)
+	o.sessIDsToUsers[event.Session] = u
 
 	return nil
 }
 
-func (o *auditdEventer) deleteCachedSessionsBefore(t time.Time) {
-	for id, cache := range o.sessIDsToEvents {
-		if cache.createdAt.Before(t) {
-			delete(o.sessIDsToEvents, id)
+func (o *auditdEventer) deleteUsersWithoutLoginsBefore(t time.Time) {
+	for id, u := range o.sessIDsToUsers {
+		if !u.hasRUL && u.added.Before(t) {
+			delete(o.sessIDsToUsers, id)
 		}
 	}
 }
@@ -353,35 +296,15 @@ func (o *auditdEventer) deleteRemoteUserLoginsBefore(t time.Time) {
 	}
 }
 
-func (o *auditdEventer) deletePIDsToSessIDsBefore(t time.Time) {
-	for pid, cache := range o.pidsToSessIDs {
-		if cache.createdAt.Before(t) {
-			delete(o.pidsToSessIDs, pid)
-		}
-	}
-}
-
-func newSessionEventCache(createdAt time.Time) *sessionEventCache {
-	return &sessionEventCache{
-		createdAt: createdAt,
-	}
-}
-
-type sessionEventCache struct {
-	createdAt        time.Time
-	aucoalesceEvents []*aucoalesce.Event
-}
-
-type sessionIDCache struct {
-	createdAt time.Time
-	id        string
-}
-
 type user struct {
-	login common.RemoteUserLogin
+	added  time.Time
+	srcPID int
+	hasRUL bool
+	login  common.RemoteUserLogin
+	cached []*aucoalesce.Event
 }
 
-func userActionAuditEvent(u user, ae *aucoalesce.Event) *auditevent.AuditEvent {
+func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	outcome := auditevent.OutcomeFailed
 	switch ae.Result {
 	case "success":
@@ -392,18 +315,18 @@ func userActionAuditEvent(u user, ae *aucoalesce.Event) *auditevent.AuditEvent {
 
 	// TODO: Subjects should contain the user's login ID.
 	//  Do we need to assign it to the map again to be sure?
-	subjectsCopy := make(map[string]string, len(u.login.Source.Subjects))
-	for k, v := range u.login.Source.Subjects {
+	subjectsCopy := make(map[string]string, len(o.login.Source.Subjects))
+	for k, v := range o.login.Source.Subjects {
 		subjectsCopy[k] = v
 	}
 
 	evt := auditevent.NewAuditEvent(
 		common.ActionUserAction,
-		u.login.Source.Source,
+		o.login.Source.Source,
 		outcome,
 		subjectsCopy,
 		"auditd",
-	).WithTarget(u.login.Source.Target)
+	).WithTarget(o.login.Source.Target)
 
 	evt.LoggedAt = ae.Timestamp
 	evt.Metadata.AuditID = ae.Session
@@ -417,4 +340,21 @@ func userActionAuditEvent(u user, ae *aucoalesce.Event) *auditevent.AuditEvent {
 	}
 
 	return evt
+}
+
+func (o *user) writeAndClearCache(writer *auditevent.EventWriter) error {
+	if len(o.cached) == 0 {
+		return nil
+	}
+
+	for i := range o.cached {
+		err := writer.Write(o.toAuditEvent(o.cached[i]))
+		if err != nil {
+			return err
+		}
+	}
+
+	o.cached = nil
+
+	return nil
 }
