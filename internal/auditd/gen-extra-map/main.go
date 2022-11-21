@@ -84,7 +84,7 @@ func mainWithError() error {
 		readers = append(readers, f)
 	}
 
-	if len(filePaths) == 0 {
+	if len(readers) == 0 {
 		return fmt.Errorf("no test data files were found in '%s'", flag.Arg(0))
 	}
 
