@@ -33,7 +33,7 @@ type Auditd struct {
 // TODO: Should this code close the auditd reader on behalf of the caller?
 //
 // TODO: Write documentation about creating a splunk query that shows
-//  only events after a user-start.
+// only events after a user-start.
 func (o *Auditd) Read(ctx context.Context) error {
 	// TODO: Revisit these settings.
 	const maxEventsInFlight = 1000
