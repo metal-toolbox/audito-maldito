@@ -52,7 +52,9 @@ func (o *Auditd) Read(ctx context.Context) error {
 	go func() {
 		// This code comes from the go-libaudit example in:
 		// cmd/auparse/auparse.go
-		t := time.NewTicker(500 * time.Millisecond)
+		const fiveHundredMillisecond = 500 * time.Millisecond
+
+		t := time.NewTicker(fiveHundredMillisecond)
 		defer t.Stop()
 
 		for range t.C {
