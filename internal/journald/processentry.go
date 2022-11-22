@@ -194,6 +194,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		return fmt.Errorf("failed to write event: %w", err)
 	}
 
+	// TODO: Not my favorite design... anyone have alternatives?
 	select {
 	case <-config.ctx.Done():
 		return nil

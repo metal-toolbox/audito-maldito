@@ -1,6 +1,7 @@
 package journald
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -47,6 +48,8 @@ func compareAuditLogs(t *testing.T, want, got *auditevent.AuditEvent) {
 
 func TestEntryProcessing(t *testing.T) {
 	t.Parallel()
+
+	ctx := context.Background()
 
 	expectedts, tserr := time.Parse(time.RFC3339, "2666-06-06T00:00:00Z")
 	assert.NoError(t, tserr)
@@ -280,6 +283,8 @@ func TestEntryProcessing(t *testing.T) {
 			w := auditevent.NewAuditEventWriter(enc)
 
 			err := processEntry(&processEntryConfig{
+				ctx:       ctx,
+				logins:    make(chan common.RemoteUserLogin, 1),
 				logEntry:  tt.args.logentry,
 				nodeName:  tt.args.nodename,
 				machineID: tt.args.mid,
