@@ -64,8 +64,8 @@ func mainWithError() error {
 		return err
 	}
 
-	var filePaths []string
-	var readers []io.Reader
+	var filePaths []string  //nolint
+	var readers []io.Reader //nolint
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -79,7 +79,7 @@ func mainWithError() error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer f.Close() //nolint
 
 		readers = append(readers, f)
 	}
@@ -107,7 +107,7 @@ func mainWithError() error {
 	go func() {
 		// This code comes from the go-libaudit example in:
 		// cmd/auparse/auparse.go
-		t := time.NewTicker(500 * time.Millisecond)
+		t := time.NewTicker(500 * time.Millisecond) //nolint
 		defer t.Stop()
 
 		for range t.C {
@@ -222,7 +222,7 @@ func processAuditdEvents(r io.Reader, reass *libaudit.Reassembler) error {
 }
 
 type reassemblerCB struct {
-	ctx  context.Context
+	ctx  context.Context //nolint
 	msgs chan<- []*auparse.AuditMessage
 }
 
@@ -250,16 +250,16 @@ func addCaseStatement(i int, event *aucoalesce.Event, buf *bytes.Buffer) {
 	buf.WriteString("\tcase ")
 	buf.WriteString(strconv.Itoa(i))
 
-	buf.WriteString(fmt.Sprintf(":\n\t\t// auditd sequence number: %d\n", event.Sequence))
-	buf.WriteString("\t\textra = map[string]interface{}{\n")
+	buf.WriteString(fmt.Sprintf(":\n\t\t// auditd sequence number: %d\n", event.Sequence)) //nolint
+	buf.WriteString("\t\textra = map[string]interface{}{\n")                               //nolint
 
-	buf.WriteString(fmt.Sprintf("\t\t\t\"action\": \"%s\",\n", event.Summary.Action))
-	buf.WriteString(fmt.Sprintf("\t\t\t\"how\":    \"%s\",\n", event.Summary.How))
+	buf.WriteString(fmt.Sprintf("\t\t\t\"action\": \"%s\",\n", event.Summary.Action)) //nolint
+	buf.WriteString(fmt.Sprintf("\t\t\t\"how\":    \"%s\",\n", event.Summary.How))    //nolint
 
-	buf.WriteString("\t\t\t\"object\": aucoalesce.Object{\n")
-	buf.WriteString(fmt.Sprintf("\t\t\t\tType:      \"%s\",\n", event.Summary.Object.Type))
-	buf.WriteString(fmt.Sprintf("\t\t\t\tPrimary:   \"%s\",\n", event.Summary.Object.Primary))
-	buf.WriteString(fmt.Sprintf("\t\t\t\tSecondary: \"%s\",\n", event.Summary.Object.Secondary))
+	buf.WriteString("\t\t\t\"object\": aucoalesce.Object{\n")                                    //nolint
+	buf.WriteString(fmt.Sprintf("\t\t\t\tType:      \"%s\",\n", event.Summary.Object.Type))      //nolint
+	buf.WriteString(fmt.Sprintf("\t\t\t\tPrimary:   \"%s\",\n", event.Summary.Object.Primary))   //nolint
+	buf.WriteString(fmt.Sprintf("\t\t\t\tSecondary: \"%s\",\n", event.Summary.Object.Secondary)) //nolint
 
-	buf.WriteString("\t\t\t},\n\t\t}\n")
+	buf.WriteString("\t\t\t},\n\t\t}\n") //nolint
 }
