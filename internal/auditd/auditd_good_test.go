@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
+func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
@@ -148,7 +148,7 @@ func TestAuditd_RemoteUserLoginFirst(t *testing.T) {
 	goodChecker.check()
 }
 
-func TestAuditd_AuditdEventsFirst(t *testing.T) {
+func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
