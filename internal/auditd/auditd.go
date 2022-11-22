@@ -67,7 +67,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	eventProcessorDone := make(chan error, 1)
 
 	go func() {
-		eventProcessorDone <- processAuditdEvents(o.Source, reassembler)
+		eventProcessorDone <- processAuditdLogLines(o.Source, reassembler)
 	}()
 
 	eventer := newAuditdEventer(o.EventW)
@@ -115,7 +115,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-func processAuditdEvents(r io.Reader, reass *libaudit.Reassembler) error {
+func processAuditdLogLines(r io.Reader, reass *libaudit.Reassembler) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
