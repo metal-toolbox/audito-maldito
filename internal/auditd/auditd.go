@@ -132,7 +132,8 @@ func processAuditdEvents(r io.Reader, reass *libaudit.Reassembler) error {
 
 		auditMsg, err := auparse.ParseLogLine(line)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse auditd log line '%s' - %w",
+				line, err)
 		}
 
 		reass.PushMessage(auditMsg)
@@ -245,7 +246,8 @@ func (o *auditdEventer) handleAuditdEvent(event *aucoalesce.Event) error {
 
 			err := u.writeAndClearCache(o.eventWriter)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to write cached events for user '%s' - %w",
+					u.login.CredUserID, err)
 			}
 
 			return o.eventWriter.Write(u.toAuditEvent(event))
