@@ -38,11 +38,11 @@ func (o *Auditd) Read(ctx context.Context) error {
 	// TODO: Revisit these settings.
 	const maxEventsInFlight = 1000
 	const eventTimeout = 2 * time.Second
-	auditdEvents := make(chan []*auparse.AuditMessage)
+	parseAuditdEvents := make(chan parseAuditdEventResult)
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:  ctx,
-		msgs: auditdEvents,
+		ctx:     ctx,
+		results: parseAuditdEvents,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
@@ -64,10 +64,9 @@ func (o *Auditd) Read(ctx context.Context) error {
 		}
 	}()
 
-	eventProcessorDone := make(chan error, 1)
-
+	parseAuditdLogsDone := make(chan error, 1)
 	go func() {
-		eventProcessorDone <- processAuditdLogLines(o.Source, reassembler)
+		parseAuditdLogsDone <- parseAuditdLogs(o.Source, reassembler)
 	}()
 
 	eventer := newAuditdEventer(o.EventW)
@@ -79,12 +78,6 @@ func (o *Auditd) Read(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err = <-eventProcessorDone:
-			if err != nil {
-				return fmt.Errorf("auditd event processer exited unexpectedly with error - %w", err)
-			}
-
-			return errors.New("auditd event processor exited unexpectedly with nil error")
 		case <-staleDataTicker.C:
 			aMinuteAgo := time.Now().Add(-time.Minute)
 
@@ -95,27 +88,27 @@ func (o *Auditd) Read(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
-		case events := <-auditdEvents:
-			// TODO: Maybe CoalesceMessages and ResolveIDs should
-			//  be executed on a different Go routine?
-			// TODO: yes.
-			auditdEvent, err := aucoalesce.CoalesceMessages(events)
+		case err = <-parseAuditdLogsDone:
 			if err != nil {
-				return fmt.Errorf("failed to coalesce auditd messages - %w", err)
+				return fmt.Errorf("auditd log parser exited unexpectedly with error - %w", err)
 			}
 
-			aucoalesce.ResolveIDs(auditdEvent)
+			return errors.New("auditd log parser exited unexpectedly with nil error")
+		case parseResult := <-parseAuditdEvents:
+			if parseResult.err != nil {
+				return err
+			}
 
-			err = eventer.handleAuditdEvent(auditdEvent)
+			err = eventer.auditdEvent(parseResult.event)
 			if err != nil {
-				return fmt.Errorf("failed to handle auditd event '%s' - %w",
-					auditdEvent.Type, err)
+				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
+					parseResult.event.Type, parseResult.event.Sequence, err)
 			}
 		}
 	}
 }
 
-func processAuditdLogLines(r io.Reader, reass *libaudit.Reassembler) error {
+func parseAuditdLogs(r io.Reader, reass *libaudit.Reassembler) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -142,20 +135,40 @@ func processAuditdLogLines(r io.Reader, reass *libaudit.Reassembler) error {
 	return scanner.Err()
 }
 
+// reassemblerCB implements the libaudit.Stream interface.
 type reassemblerCB struct {
-	ctx  context.Context
-	msgs chan<- []*auparse.AuditMessage
+	ctx     context.Context
+	results chan<- parseAuditdEventResult
 }
 
 func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
+	event, err := aucoalesce.CoalesceMessages(msgs)
+	if err != nil {
+		select {
+		case <-s.ctx.Done():
+		case s.results <- parseAuditdEventResult{
+			err: fmt.Errorf("failed to coalesce auditd messages - %w", err),
+		}:
+		}
+
+		return
+	}
+
+	aucoalesce.ResolveIDs(event)
+
 	select {
 	case <-s.ctx.Done():
-	case s.msgs <- msgs:
+	case s.results <- parseAuditdEventResult{event: event}:
 	}
 }
 
 func (s *reassemblerCB) EventsLost(count int) {
 	logger.Errorf("lost %d auditd events during reassembly", count)
+}
+
+type parseAuditdEventResult struct {
+	event *aucoalesce.Event
+	err   error
 }
 
 func newAuditdEventer(eventWriter *auditevent.EventWriter) *auditdEventer {
@@ -166,9 +179,9 @@ func newAuditdEventer(eventWriter *auditevent.EventWriter) *auditdEventer {
 	}
 }
 
-// auditdEventer tracks both remote user logins and auditd user_starts,
-// allowing us to correlate auditd events back to the credential a user
-// used to authenticate.
+// auditdEventer tracks both remote user logins and auditd sessions,
+// allowing us to correlate auditd events back to the credential
+// a user used to authenticate.
 type auditdEventer struct {
 	// sessIDsToUsers contains active auditd sessions which may
 	// or may not have a common.RemoteUserLogin associated with
@@ -223,7 +236,7 @@ func (o *auditdEventer) remoteLogin(rul common.RemoteUserLogin) error {
 	return nil
 }
 
-func (o *auditdEventer) handleAuditdEvent(event *aucoalesce.Event) error {
+func (o *auditdEventer) auditdEvent(event *aucoalesce.Event) error {
 	// TODO: Handle the "SystemAction" type (where session == "unset").
 	//  ps: "unset" is a string.
 
