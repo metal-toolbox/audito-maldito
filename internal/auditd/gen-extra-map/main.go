@@ -49,7 +49,7 @@ func mainWithError() error {
 
 	flag.Parse()
 
-	if flag.NArg() == 0 {
+	if flag.NArg() != 1 {
 		return errors.New("please specify a directory containing test data files as a non-flag argument")
 	}
 
