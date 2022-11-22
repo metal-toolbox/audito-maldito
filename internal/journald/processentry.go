@@ -64,7 +64,7 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 }
 
 type processEntryConfig struct {
-	ctx       context.Context
+	ctx       context.Context //nolint
 	logins    chan<- common.RemoteUserLogin
 	logEntry  string
 	nodeName  string
