@@ -54,6 +54,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
@@ -126,6 +128,12 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 			return
 		}
 
+		_, err = w.Write([]byte(goodAuditd05))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
 		close(writesDone)
 	}()
 
@@ -149,6 +157,8 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 }
 
 func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
@@ -208,6 +218,12 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 		}
 
 		_, err = w.Write([]byte(goodAuditd04))
+		if err != nil {
+			writesDone <- err
+			return
+		}
+
+		_, err = w.Write([]byte(goodAuditd05))
 		if err != nil {
 			writesDone <- err
 			return
@@ -244,7 +260,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 }
 
 type testAuditEncoder struct {
-	ctx    context.Context
+	ctx    context.Context //nolint
 	events chan<- *auditevent.AuditEvent
 	t      *testing.T
 }
@@ -385,7 +401,7 @@ func (o goodAuditdEventsChecker) checkEvent(i int, target *auditevent.AuditEvent
 		o.t.Fatalf("i: %d | metadata's extra map is empty", i)
 	}
 
-	for kExp, vExp := range meta.Extra {
+	for kExp, vExp := range meta.Extra { //nolint
 		something, hasIt := target.Metadata.Extra[kExp]
 		if !hasIt {
 			o.t.Fatalf("i: %d | metadata is missing key '%s'", i, kExp)
