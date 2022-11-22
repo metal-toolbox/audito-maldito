@@ -139,7 +139,7 @@ func parseAuditdLogs(r io.Reader, reass *libaudit.Reassembler) error {
 
 // reassemblerCB implements the libaudit.Stream interface.
 type reassemblerCB struct {
-	ctx     context.Context
+	ctx     context.Context //nolint
 	results chan<- reassembleAuditdEventResult
 }
 
