@@ -69,7 +69,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 		parseAuditdLogsDone <- parseAuditdLogs(o.Source, reassembler)
 	}()
 
-	eventer := newAuditdEventer(o.EventW)
+	tracker := newSessionTracker(o.EventW)
 
 	staleDataTicker := time.NewTicker(time.Minute)
 	defer staleDataTicker.Stop()
@@ -81,10 +81,10 @@ func (o *Auditd) Read(ctx context.Context) error {
 		case <-staleDataTicker.C:
 			aMinuteAgo := time.Now().Add(-time.Minute)
 
-			eventer.deleteUsersWithoutLoginsBefore(aMinuteAgo)
-			eventer.deleteRemoteUserLoginsBefore(aMinuteAgo)
+			tracker.deleteUsersWithoutLoginsBefore(aMinuteAgo)
+			tracker.deleteRemoteUserLoginsBefore(aMinuteAgo)
 		case remoteLogin := <-o.Logins:
-			err = eventer.remoteLogin(remoteLogin)
+			err = tracker.remoteLogin(remoteLogin)
 			if err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
@@ -99,7 +99,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
 			}
 
-			err = eventer.auditdEvent(result.event)
+			err = tracker.auditdEvent(result.event)
 			if err != nil {
 				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
 					result.event.Type, result.event.Sequence, err)
@@ -171,18 +171,18 @@ type reassembleAuditdEventResult struct {
 	err   error
 }
 
-func newAuditdEventer(eventWriter *auditevent.EventWriter) *auditdEventer {
-	return &auditdEventer{
+func newSessionTracker(eventWriter *auditevent.EventWriter) *sessionTracker {
+	return &sessionTracker{
 		sessIDsToUsers: make(map[string]*user),
 		pidsToRULs:     make(map[int]common.RemoteUserLogin),
 		eventWriter:    eventWriter,
 	}
 }
 
-// auditdEventer tracks both remote user logins and auditd sessions,
+// sessionTracker tracks both remote user logins and auditd sessions,
 // allowing us to correlate auditd events back to the credential
 // a user used to authenticate.
-type auditdEventer struct {
+type sessionTracker struct {
 	// sessIDsToUsers contains active auditd sessions which may
 	// or may not have a common.RemoteUserLogin associated with
 	// them. It also acts as an auditd event cache.
@@ -209,7 +209,7 @@ type auditdEventer struct {
 	eventWriter *auditevent.EventWriter
 }
 
-func (o *auditdEventer) remoteLogin(rul common.RemoteUserLogin) error {
+func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	err := rul.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate remote user login - %w", err)
@@ -236,7 +236,7 @@ func (o *auditdEventer) remoteLogin(rul common.RemoteUserLogin) error {
 	return nil
 }
 
-func (o *auditdEventer) auditdEvent(event *aucoalesce.Event) error {
+func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 	// TODO: Handle the "SystemAction" type (where session == "unset").
 	//  ps: "unset" is a string.
 
@@ -295,7 +295,7 @@ func (o *auditdEventer) auditdEvent(event *aucoalesce.Event) error {
 	return nil
 }
 
-func (o *auditdEventer) deleteUsersWithoutLoginsBefore(t time.Time) {
+func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 	for id, u := range o.sessIDsToUsers {
 		if !u.hasRUL && u.added.Before(t) {
 			delete(o.sessIDsToUsers, id)
@@ -303,7 +303,7 @@ func (o *auditdEventer) deleteUsersWithoutLoginsBefore(t time.Time) {
 	}
 }
 
-func (o *auditdEventer) deleteRemoteUserLoginsBefore(t time.Time) {
+func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
 	for pid, userLogin := range o.pidsToRULs {
 		if userLogin.Source.LoggedAt.Before(t) {
 			delete(o.pidsToRULs, pid)
