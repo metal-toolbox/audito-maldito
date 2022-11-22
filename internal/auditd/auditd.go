@@ -38,11 +38,11 @@ func (o *Auditd) Read(ctx context.Context) error {
 	// TODO: Revisit these settings.
 	const maxEventsInFlight = 1000
 	const eventTimeout = 2 * time.Second
-	parseAuditdEvents := make(chan parseAuditdEventResult)
+	reassembleAuditdEvents := make(chan reassembleAuditdEventResult)
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
 		ctx:     ctx,
-		results: parseAuditdEvents,
+		results: reassembleAuditdEvents,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
@@ -94,15 +94,15 @@ func (o *Auditd) Read(ctx context.Context) error {
 			}
 
 			return errors.New("auditd log parser exited unexpectedly with nil error")
-		case parseResult := <-parseAuditdEvents:
-			if parseResult.err != nil {
-				return err
+		case result := <-reassembleAuditdEvents:
+			if result.err != nil {
+				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
 			}
 
-			err = eventer.auditdEvent(parseResult.event)
+			err = eventer.auditdEvent(result.event)
 			if err != nil {
 				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
-					parseResult.event.Type, parseResult.event.Sequence, err)
+					result.event.Type, result.event.Sequence, err)
 			}
 		}
 	}
@@ -138,7 +138,7 @@ func parseAuditdLogs(r io.Reader, reass *libaudit.Reassembler) error {
 // reassemblerCB implements the libaudit.Stream interface.
 type reassemblerCB struct {
 	ctx     context.Context
-	results chan<- parseAuditdEventResult
+	results chan<- reassembleAuditdEventResult
 }
 
 func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
@@ -146,7 +146,7 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 	if err != nil {
 		select {
 		case <-s.ctx.Done():
-		case s.results <- parseAuditdEventResult{
+		case s.results <- reassembleAuditdEventResult{
 			err: fmt.Errorf("failed to coalesce auditd messages - %w", err),
 		}:
 		}
@@ -158,7 +158,7 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 
 	select {
 	case <-s.ctx.Done():
-	case s.results <- parseAuditdEventResult{event: event}:
+	case s.results <- reassembleAuditdEventResult{event: event}:
 	}
 }
 
@@ -166,7 +166,7 @@ func (s *reassemblerCB) EventsLost(count int) {
 	logger.Errorf("lost %d auditd events during reassembly", count)
 }
 
-type parseAuditdEventResult struct {
+type reassembleAuditdEventResult struct {
 	event *aucoalesce.Event
 	err   error
 }
