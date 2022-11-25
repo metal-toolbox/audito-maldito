@@ -26,12 +26,12 @@ var logger *zap.SugaredLogger
 func mainWithErr() error {
 	var bootID string
 	var auditlogpath string
-	var auditdLogPath string
+	var auditLogDirPath string
 
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
 	flag.StringVar(&bootID, "boot-id", "", "Boot-ID to read from the journal")
 	flag.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
-	flag.StringVar(&auditdLogPath, "auditd-log-path", "/var/log/audit/audit.log", "Path to the Linux auditd log file")
+	flag.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
 
 	flag.Parse()
 
@@ -73,14 +73,13 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to ensure flush directory: %w", err)
 	}
 
-	// TODO: Handle auditd log file rotations by wrapping the os.File
-	//  with something magic.
-	auditdLog, err := os.Open(auditdLogPath)
+	// TODO: Figure out cancellation method that won't result in deadlock
+	// when waiting for underlying files to be closed.
+	dr, err := auditd.DirReaderFor(ctx, auditLogDirPath)
 	if err != nil {
-		return fmt.Errorf("failed to open auditd log file at '%s' - %w",
-			auditdLogPath, err)
+		return fmt.Errorf("failed to create audit dir reader for '%s' - %w",
+			auditLogDirPath, err)
 	}
-	defer auditdLog.Close()
 
 	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditlogpath)
 	if auditfileerr != nil {
@@ -106,7 +105,7 @@ func mainWithErr() error {
 
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			Source: auditdLog,
+			Source: dr,
 			Logins: logins,
 			EventW: eventWriter,
 		}

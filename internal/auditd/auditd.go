@@ -1,11 +1,9 @@
 package auditd
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"time"
 
@@ -25,7 +23,7 @@ func SetLogger(l *zap.SugaredLogger) {
 }
 
 type Auditd struct {
-	Source io.Reader
+	Source DirReader
 	Logins <-chan common.RemoteUserLogin
 	EventW *auditevent.EventWriter
 }
@@ -108,31 +106,31 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-func parseAuditdLogs(r io.Reader, reass *libaudit.Reassembler) error {
-	scanner := bufio.NewScanner(r)
+func parseAuditdLogs(r DirReader, reass *libaudit.Reassembler) error {
+	for {
+		select {
+		case err := <-r.Exited():
+			return fmt.Errorf("dir reader exited unexpectedly - %w", err)
+		case line := <-r.Lines():
+			if line == "" {
+				// Parsing an empty line results in this error:
+				//    invalid audit message header
+				//
+				// I ran into this while writing unit tests,
+				// as several auditd string literal constants
+				// started with a new line.
+				continue
+			}
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			// Parsing an empty line results in this error:
-			//    invalid audit message header
-			//
-			// I ran into this while writing unit tests,
-			// as several auditd string literal constants
-			// started with a new line.
-			continue
+			auditMsg, err := auparse.ParseLogLine(line)
+			if err != nil {
+				return fmt.Errorf("failed to parse auditd log line '%s' - %w",
+					line, err)
+			}
+
+			reass.PushMessage(auditMsg)
 		}
-
-		auditMsg, err := auparse.ParseLogLine(line)
-		if err != nil {
-			return fmt.Errorf("failed to parse auditd log line '%s' - %w",
-				line, err)
-		}
-
-		reass.PushMessage(auditMsg)
 	}
-
-	return scanner.Err()
 }
 
 // reassemblerCB implements the libaudit.Stream interface.

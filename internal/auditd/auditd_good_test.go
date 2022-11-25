@@ -3,12 +3,13 @@ package auditd
 //go:generate go run gen-extra-map/main.go -only-ids -d Good -o auditd_good_metadata_test.go testdata/good
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,17 +60,20 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
+	dr := newTestDirReader(ctx, []string{
+		goodAuditd00,
+		goodAuditd01,
+		goodAuditd02,
+		goodAuditd03,
+		goodAuditd04,
+		goodAuditd05,
+	})
+
 	logins := make(chan common.RemoteUserLogin)
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
-	r, w := io.Pipe()
-	defer func() {
-		_ = r.Close()
-		_ = w.Close()
-	}()
-
 	a := Auditd{
-		Source: r,
+		Source: dr,
 		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
@@ -79,7 +83,6 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	}
 
 	exited := make(chan error, 1)
-
 	go func() {
 		exited <- a.Read(ctx)
 	}()
@@ -92,55 +95,12 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 		t.Fatalf("read exited unexpectedly while writing remote user login to logins chan - %v", err)
 	}
 
-	writesDone := make(chan error, 1)
-	go func() {
-		// Perform writes in a separate Go routine in order to
-		// handle potential scenarios where the writes block.
-		// This allows the context to timeout and the test
-		// to fail.
-		_, err := w.Write([]byte(goodAuditd00))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd01))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd02))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd03))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd04))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd05))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		close(writesDone)
-	}()
+	dr.allowWritesToStart()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-writesDone:
+	case err := <-dr.writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -162,17 +122,20 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
+	dr := newTestDirReader(ctx, []string{
+		goodAuditd00,
+		goodAuditd01,
+		goodAuditd02,
+		goodAuditd03,
+		goodAuditd04,
+		goodAuditd05,
+	})
+
 	logins := make(chan common.RemoteUserLogin)
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
-	r, w := io.Pipe()
-	defer func() {
-		_ = r.Close()
-		_ = w.Close()
-	}()
-
 	a := Auditd{
-		Source: r,
+		Source: dr,
 		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
@@ -182,60 +145,16 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	}
 
 	exited := make(chan error, 1)
-
 	go func() {
 		exited <- a.Read(ctx)
 	}()
 
-	writesDone := make(chan error, 1)
-	go func() {
-		// Perform writes in a separate Go routine in order to
-		// handle potential scenarios where the writes block.
-		// This allows the context to timeout and the test
-		// to fail.
-		_, err := w.Write([]byte(goodAuditd00))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd01))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd02))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd03))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd04))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		_, err = w.Write([]byte(goodAuditd05))
-		if err != nil {
-			writesDone <- err
-			return
-		}
-
-		close(writesDone)
-	}()
+	dr.allowWritesToStart()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-writesDone:
+	case err := <-dr.writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -257,6 +176,69 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	}
 
 	checker.check()
+}
+
+func newTestDirReader(ctx context.Context, lineSetsToSend []string) *testDirReader {
+	exited := make(chan error, 2)
+
+	go func() {
+		<-ctx.Done()
+		exited <- ctx.Err()
+		close(exited)
+	}()
+
+	lines := make(chan string)
+	allowWrite := make(chan struct{})
+	writesDone := make(chan error, 1)
+
+	go func() {
+		defer close(writesDone)
+
+		<-allowWrite
+
+		for _, lineSet := range lineSetsToSend {
+			scanner := bufio.NewScanner(strings.NewReader(lineSet))
+
+			for scanner.Scan() {
+				select {
+				case <-ctx.Done():
+					return
+				case lines <- scanner.Text():
+					// continue.
+				}
+			}
+
+			if scanner.Err() != nil {
+				writesDone <- fmt.Errorf("testDirReader bufio.Scanner failed - %w", scanner.Err())
+			}
+		}
+	}()
+
+	return &testDirReader{
+		lines:      lines,
+		exited:     exited,
+		allowWrite: allowWrite,
+		writesDone: writesDone,
+	}
+}
+
+type testDirReader struct {
+	lines      chan string
+	exited     chan error
+	allowWrite chan struct{}
+	writesDone chan error
+}
+
+func (o *testDirReader) allowWritesToStart() {
+	close(o.allowWrite)
+}
+
+func (o *testDirReader) Lines() <-chan string {
+	return o.lines
+}
+
+func (o *testDirReader) Exited() <-chan error {
+	return o.exited
 }
 
 type testAuditEncoder struct {
