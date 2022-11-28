@@ -135,6 +135,7 @@ func mainWithErr() error {
 		return ap.Read(gctx)
 	})
 
+	// TODO: What happens if one routine exits, but the rest keep going?
 	if err := eg.Wait(); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			return fmt.Errorf("workers finished with error: %w", err)
