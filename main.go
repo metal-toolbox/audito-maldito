@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
@@ -86,6 +87,26 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
+	var afterUsec uint64
+
+	lastRead, err := common.GetLastRead()
+	switch {
+	case err != nil:
+		afterUsec = uint64(time.Now().UnixMicro())
+
+		logger.Warnf("failed to read last read timestamp for journal - "+
+			"reading from current time (reason: '%s')", err.Error())
+	case lastRead == 0:
+		afterUsec = uint64(time.Now().UnixMicro())
+
+		logger.Info("last read timestamp for journal is zero - " +
+			"reading from current time")
+	default:
+		afterUsec = lastRead
+
+		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
+	}
+
 	logger.Infoln("starting workers...")
 
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
@@ -99,12 +120,14 @@ func mainWithErr() error {
 			Distro:    distro,
 			EventW:    eventWriter,
 			Logins:    logins,
+			CurrentTS: afterUsec,
 		}
 		return jp.Read(gctx)
 	})
 
 	eg.Go(func() error {
 		ap := auditd.Auditd{
+			After:  time.UnixMicro(int64(afterUsec)),
 			Source: dr,
 			Logins: logins,
 			EventW: eventWriter,

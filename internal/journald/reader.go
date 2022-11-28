@@ -26,7 +26,7 @@ type Processor struct {
 	Distro    util.DistroType
 	EventW    *auditevent.EventWriter
 	Logins    chan<- common.RemoteUserLogin
-	currentTS uint64 // Microseconds since unix epoch.
+	CurrentTS uint64 // Microseconds since unix epoch.
 	jr        JournalReader
 }
 
@@ -34,29 +34,11 @@ func (jp *Processor) getJournalReader() JournalReader {
 	return jp.jr
 }
 
-// ProcessJournal reads the journal and sends the events to the EventWriter.
+// Read reads the journal and sends the events to the EventWriter.
 func (jp *Processor) Read(ctx context.Context) error {
-	// TODO: Do we need to store this value on a per-service basis?
-	//  I don't think so... but we should answer that question :)
-	lastRead, err := common.GetLastRead()
-	switch {
-	case err != nil:
-		jp.currentTS = uint64(time.Now().UnixMicro())
+	var err error
 
-		logger.Warnf("failed to read last read timestamp for journal - "+
-			"reading from current time (reason: '%s')", err.Error())
-	case lastRead == 0:
-		jp.currentTS = uint64(time.Now().UnixMicro())
-
-		logger.Info("last read timestamp for journal is zero - " +
-			"reading from current time")
-	default:
-		jp.currentTS = lastRead
-
-		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
-	}
-
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.currentTS)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.CurrentTS)
 	if err != nil {
 		return err
 	}
@@ -69,7 +51,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 
 	defer func() {
 		// Using an anonymous function here allows us to save the
-		// current value of currentTS. Using "defer(flushLastRead(...))"
+		// current value of CurrentTS. Using "defer(flushLastRead(...))"
 		// results in the deferred function receiving an out-of-date
 		// copy of the value.
 		//
@@ -77,7 +59,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 		// on Processor... but the tradeoff between exposing all the
 		// struct's fields to such a simple function is making me
 		// second guess that.
-		flushLastRead(jp.currentTS)
+		flushLastRead(jp.CurrentTS)
 	}()
 
 	for {
@@ -102,7 +84,7 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 	if nextErr != nil {
 		if errors.Is(nextErr, io.EOF) {
 			if r := j.Wait(defaultSleep); r < 0 {
-				flushLastRead(jp.currentTS)
+				flushLastRead(jp.CurrentTS)
 
 				logger.Infof("wait failed after calling next, reinitializing (error-code: %d)", r)
 				time.Sleep(defaultSleep)
@@ -124,7 +106,7 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 
 	if isNewFile == 0 {
 		if r := j.Wait(defaultSleep); r < 0 {
-			flushLastRead(jp.currentTS)
+			flushLastRead(jp.CurrentTS)
 
 			logger.Errorf("wait failed after checking for new journal file, "+
 				"reinitializing. error-code: %d", r)
@@ -151,7 +133,7 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 	}
 
 	usec := entry.GetTimeStamp()
-	jp.currentTS = usec
+	jp.CurrentTS = usec
 
 	err := processEntry(&processEntryConfig{
 		ctx:       ctx,
@@ -176,7 +158,7 @@ func (jp *Processor) resetJournal() error {
 	}
 
 	var err error
-	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.currentTS)
+	jp.jr, err = newJournalReader(jp.BootID, jp.Distro, jp.CurrentTS)
 	if err != nil {
 		return fmt.Errorf("failed to reset journal: %w", err)
 	}

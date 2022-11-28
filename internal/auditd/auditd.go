@@ -23,6 +23,13 @@ func SetLogger(l *zap.SugaredLogger) {
 }
 
 type Auditd struct {
+	// After filters audit events prior to a particular point in time.
+	// For example, using time.Now means all events that occurred
+	// before time.Now will be ignored.
+	//
+	// A zero time.Time means events are ignored.
+	After time.Time
+
 	Source DirReader
 	Logins <-chan common.RemoteUserLogin
 	EventW *auditevent.EventWriter
@@ -41,6 +48,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
 		ctx:     ctx,
 		results: reassembleAuditdEvents,
+		after:   o.After,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
@@ -137,6 +145,7 @@ func parseAuditdLogs(r DirReader, reass *libaudit.Reassembler) error {
 type reassemblerCB struct {
 	ctx     context.Context //nolint
 	results chan<- reassembleAuditdEventResult
+	after   time.Time
 }
 
 func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
@@ -149,6 +158,10 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 		}:
 		}
 
+		return
+	}
+
+	if event.Timestamp.Before(s.after) {
 		return
 	}
 
