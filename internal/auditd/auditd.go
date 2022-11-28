@@ -22,6 +22,8 @@ func SetLogger(l *zap.SugaredLogger) {
 	logger = l
 }
 
+// Auditd enables correlation of remote user logins (and the credential they
+// used to log in with, such as a SSH certificate) and Linux audit events.
 type Auditd struct {
 	// After filters audit events prior to a particular point in time.
 	// For example, using time.Now means all events that occurred
@@ -31,7 +33,12 @@ type Auditd struct {
 	After time.Time
 
 	Source DirReader
+
+	// Logins receives common.RemoteUserLogin when a user logs in
+	// remotely through a service like sshd.
 	Logins <-chan common.RemoteUserLogin
+
+	// EventW is the auditevent.EventWriter to write events to.
 	EventW *auditevent.EventWriter
 }
 
