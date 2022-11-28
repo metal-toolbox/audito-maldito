@@ -59,6 +59,7 @@ func DirReaderFor(ctx context.Context, dirPath string) (DirReader, error) {
 
 	err = watcher.Add(dirPath)
 	if err != nil {
+		_ = watcher.Close()
 		return nil, fmt.Errorf("failed to add dir path '%s' to watcher - %w", dirPath, err)
 	}
 
