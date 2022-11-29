@@ -154,7 +154,7 @@ func (o *dirReader) loopWithError(ctx context.Context) error {
 	mainLogPath := filepath.Join(o.dirPath, "audit.log")
 
 	mainLog := &rotatingFile{
-		openFn: func() (file, error) {
+		openFn: func() (io.ReadSeekCloser, error) {
 			return o.fs.Open(mainLogPath)
 		},
 		offset: 0,
@@ -215,7 +215,7 @@ type initialFileRead struct {
 }
 
 type rotatingFile struct {
-	openFn func() (file, error)
+	openFn func() (io.ReadSeekCloser, error)
 	offset int64
 	lines  chan<- string
 }
@@ -296,33 +296,14 @@ func (o *fsnotifyWatcher) Close() error {
 // fileSystem abstracts a file system similar to Go's io/fs standard library.
 type fileSystem interface {
 	// Open opens a file for the given path.
-	Open(filePath string) (file, error)
+	Open(filePath string) (io.ReadSeekCloser, error)
 }
 
 // osFileSystem implements fileSystem using Go's os standard library.
 type osFileSystem struct{}
 
-func (o *osFileSystem) Open(filePath string) (file, error) {
+func (o *osFileSystem) Open(filePath string) (io.ReadSeekCloser, error) {
 	return os.Open(filePath)
-}
-
-// file abstracts the os.File methods required by rotatingFile.
-type file interface {
-	// Read reads up to len(b) bytes from the File and stores them in b.
-	// It returns the number of bytes read and any error encountered.
-	// At end of file, Read returns 0, io.EOF.
-	//
-	// Refer to the documentation for os.File.Read for more information.
-	Read(b []byte) (int, error)
-
-	// Seek sets the offset for the next Read or Write on file to offset,
-	// interpreted according to whence.
-	//
-	// Refer to the documentation for os.File.Seek for more information.
-	Seek(offset int64, whence int) (int64, error)
-
-	// Close closes the file.
-	Close() error
 }
 
 // readFilePathLines reads all the data from filePath using bufio.ScanLines.
