@@ -220,10 +220,6 @@ type sessionTracker struct {
 
 	// eventWriter is the auditevent.EventWriter to write
 	// the resulting audit event to.
-	//
-	// TODO: Should we execute writes w/ a timeout?
-	//  Had a deadlock in testing because the Go
-	//  routine executes the writes directly.
 	eventWriter *auditevent.EventWriter
 }
 
