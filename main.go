@@ -84,25 +84,7 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	var afterUsec uint64
-
-	lastRead, err := common.GetLastRead()
-	switch {
-	case err != nil:
-		afterUsec = uint64(time.Now().UnixMicro())
-
-		logger.Warnf("failed to read last read timestamp for journal - "+
-			"reading from current time (reason: '%s')", err.Error())
-	case lastRead == 0:
-		afterUsec = uint64(time.Now().UnixMicro())
-
-		logger.Info("last read timestamp for journal is zero - " +
-			"reading from current time")
-	default:
-		afterUsec = lastRead
-
-		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
-	}
+	lastReadJournalTS := lastReadJournalTimeStamp()
 
 	logger.Infoln("starting workers...")
 
@@ -118,14 +100,14 @@ func mainWithErr() error {
 			Distro:    distro,
 			EventW:    eventWriter,
 			Logins:    logins,
-			CurrentTS: afterUsec,
+			CurrentTS: lastReadJournalTS,
 		}
 		return jp.Read(groupCtx)
 	})
 
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			After:  time.UnixMicro(int64(afterUsec)),
+			After:  time.UnixMicro(int64(lastReadJournalTS)),
 			Source: dr,
 			Logins: logins,
 			EventW: eventWriter,
@@ -146,6 +128,28 @@ func mainWithErr() error {
 	logger.Infoln("all workers finished without error")
 
 	return nil
+}
+
+// lastReadJournalTimeStamp returns the last-read journal entry's timestamp
+// or a sensible default if the timestamp cannot be loaded.
+func lastReadJournalTimeStamp() uint64 {
+	lastRead, err := common.GetLastRead()
+	switch {
+	case err != nil:
+		lastRead = uint64(time.Now().UnixMicro())
+
+		logger.Warnf("failed to read last read timestamp for journal - "+
+			"reading from current time (reason: '%s')", err.Error())
+	case lastRead == 0:
+		lastRead = uint64(time.Now().UnixMicro())
+
+		logger.Info("last read timestamp for journal is zero - " +
+			"reading from current time")
+	default:
+		logger.Infof("last read timestamp for journal is: '%d'", lastRead)
+	}
+
+	return lastRead
 }
 
 func main() {
