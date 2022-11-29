@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -52,8 +51,6 @@ func mainWithErr() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	eg, gctx := errgroup.WithContext(ctx)
 
 	distro, err := util.Distro()
 	if err != nil {
@@ -111,6 +108,7 @@ func mainWithErr() error {
 
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
 	logins := make(chan common.RemoteUserLogin)
+	eg, groupCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
 		jp := journald.Processor{
@@ -122,7 +120,7 @@ func mainWithErr() error {
 			Logins:    logins,
 			CurrentTS: afterUsec,
 		}
-		return jp.Read(gctx)
+		return jp.Read(groupCtx)
 	})
 
 	eg.Go(func() error {
@@ -132,14 +130,17 @@ func mainWithErr() error {
 			Logins: logins,
 			EventW: eventWriter,
 		}
-		return ap.Read(gctx)
+		return ap.Read(groupCtx)
 	})
 
-	// TODO: What happens if one routine exits, but the rest keep going?
 	if err := eg.Wait(); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			return fmt.Errorf("workers finished with error: %w", err)
-		}
+		// We cannot treat errors containing context.Canceled
+		// as non-errors because the errgroup.Group uses its
+		// own context, which is canceled if one of the Go
+		// routines returns a non-nil error. Thus, treating
+		// context.Canceled as a graceful shutdown may hide
+		// an error returned by one of the Go routines.
+		return fmt.Errorf("workers finished with error: %w", err)
 	}
 
 	logger.Infoln("all workers finished without error")
