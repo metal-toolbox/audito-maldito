@@ -73,7 +73,7 @@ func mainWithErr() error {
 
 	// TODO: Figure out cancellation method that won't result in deadlock
 	// when waiting for underlying files to be closed.
-	dr, err := auditd.DirReaderFor(ctx, auditLogDirPath)
+	logDirReader, err := auditd.LogDirReader(ctx, auditLogDirPath)
 	if err != nil {
 		return fmt.Errorf("failed to create audit dir reader for '%s' - %w",
 			auditLogDirPath, err)
@@ -107,10 +107,10 @@ func mainWithErr() error {
 
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			After:  time.UnixMicro(int64(lastReadJournalTS)),
-			Source: dr,
-			Logins: logins,
-			EventW: eventWriter,
+			After:     time.UnixMicro(int64(lastReadJournalTS)),
+			LogReader: logDirReader,
+			Logins:    logins,
+			EventW:    eventWriter,
 		}
 		return ap.Read(groupCtx)
 	})

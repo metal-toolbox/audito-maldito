@@ -14,18 +14,17 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// DirReader reads all audit logs from a directory containing audit log files.
-// It then tails the main audit.log file, writing each written line to the
-// channel returned by Lines.
-type DirReader interface {
+// LogReader abstracts reading audit log lines from one or more audit
+// log files.
+type LogReader interface {
 	// Lines returns a read-only channel that receives audit log
 	// lines each time a log file is written to.
 	Lines() <-chan string
 
 	// Exited returns a read-only channel that is written to and
-	// then closed when the DirReader exits due to an unexpected
+	// then closed when the LogReader exits due to an unexpected
 	// error or cancellation. Users should read from this channel
-	// to ensure the DirReader's resources have been released
+	// to ensure the LogReader's resources have been released
 	// (e.g., that open files have been closed).
 	//
 	// The returned error is always non-nil. When cancelled,
@@ -33,8 +32,9 @@ type DirReader interface {
 	Exited() <-chan error
 }
 
-// DirReaderFor creates and starts a DirReader for the specified dirPath.
-func DirReaderFor(ctx context.Context, dirPath string) (DirReader, error) {
+// LogDirReader creates and starts a LogReader implementation for
+// the specified directory path (e.g., "/var/log/audit").
+func LogDirReader(ctx context.Context, dirPath string) (*logDirReader, error) {
 	if dirPath == "" {
 		return nil, errors.New("directory path is empty")
 	}
@@ -63,7 +63,7 @@ func DirReaderFor(ctx context.Context, dirPath string) (DirReader, error) {
 		return nil, fmt.Errorf("failed to add dir path '%s' to watcher - %w", dirPath, err)
 	}
 
-	dr := &dirReader{
+	r := &logDirReader{
 		dirPath:       dirPath,
 		initFileNames: sortLogNamesOldToNew(dirEntries),
 		watcher:       &fsnotifyWatcher{watcher: watcher},
@@ -72,9 +72,9 @@ func DirReaderFor(ctx context.Context, dirPath string) (DirReader, error) {
 		fatal:         make(chan error, 1),
 	}
 
-	go dr.loop(ctx)
+	go r.loop(ctx)
 
-	return dr, nil
+	return r, nil
 }
 
 // sortLogNamesOldToNew filters dirEntries for file names that look like
@@ -112,8 +112,8 @@ func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
 	return oldestToNew
 }
 
-// dirReader implements the DirReader interface.
-type dirReader struct {
+// logDirReader implements the LogReader interface.
+type logDirReader struct {
 	dirPath       string
 	initFileNames []string
 	watcher       fsWatcher
@@ -122,15 +122,15 @@ type dirReader struct {
 	fatal         chan error
 }
 
-func (o *dirReader) Lines() <-chan string {
+func (o *logDirReader) Lines() <-chan string {
 	return o.lines
 }
 
-func (o *dirReader) Exited() <-chan error {
+func (o *logDirReader) Exited() <-chan error {
 	return o.fatal
 }
 
-func (o *dirReader) loop(ctx context.Context) {
+func (o *logDirReader) loop(ctx context.Context) {
 	err := o.loopWithError(ctx)
 
 	_ = o.watcher.Close()
@@ -142,7 +142,7 @@ func (o *dirReader) loop(ctx context.Context) {
 // TODO: This ignores errors from the fsnotify.Watcher.
 // The "Errors" channel appears to receive only non-fatal
 // errors, as a result I feel that ignoring them seems safe.
-func (o *dirReader) loopWithError(ctx context.Context) error {
+func (o *logDirReader) loopWithError(ctx context.Context) error {
 	initFileDone := make(chan initialFileRead, 1)
 	if len(o.initFileNames) > 0 {
 		// Force the initFileDone code to run.
@@ -220,6 +220,9 @@ type rotatingFile struct {
 	lines  chan<- string
 }
 
+// read attempts to read from the reader returned by the openFn field
+// if a fsnotify.Write occurs and updates the offset so that subsequent
+// reads resume where it left off.
 func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 	// fsnotify events during a file rotation:
 	//

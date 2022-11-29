@@ -32,7 +32,8 @@ type Auditd struct {
 	// A zero time.Time means events are ignored.
 	After time.Time
 
-	Source DirReader
+	// LogReader is the LogReader to read audit log lines from.
+	LogReader LogReader
 
 	// Logins receives common.RemoteUserLogin when a user logs in
 	// remotely through a service like sshd.
@@ -79,7 +80,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	parseAuditdLogsDone := make(chan error, 1)
 	go func() {
-		parseAuditdLogsDone <- parseAuditdLogs(o.Source, reassembler)
+		parseAuditdLogsDone <- parseAuditdLogs(o.LogReader, reassembler)
 	}()
 
 	tracker := newSessionTracker(o.EventW)
@@ -121,7 +122,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-func parseAuditdLogs(r DirReader, reass *libaudit.Reassembler) error {
+func parseAuditdLogs(r LogReader, reass *libaudit.Reassembler) error {
 	for {
 		select {
 		case err := <-r.Exited():

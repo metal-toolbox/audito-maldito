@@ -60,7 +60,7 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
-	dr := newTestDirReader(ctx, []string{
+	lr := newTestLogReader(ctx, []string{
 		goodAuditd00,
 		goodAuditd01,
 		goodAuditd02,
@@ -73,8 +73,8 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		Source: dr,
-		Logins: logins,
+		LogReader: lr,
+		Logins:    logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
@@ -95,12 +95,12 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 		t.Fatalf("read exited unexpectedly while writing remote user login to logins chan - %v", err)
 	}
 
-	dr.allowWritesToStart()
+	lr.allowWritesToStart()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-dr.writesDone:
+	case err := <-lr.writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -122,7 +122,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
-	dr := newTestDirReader(ctx, []string{
+	lr := newTestLogReader(ctx, []string{
 		goodAuditd00,
 		goodAuditd01,
 		goodAuditd02,
@@ -135,8 +135,8 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		Source: dr,
-		Logins: logins,
+		LogReader: lr,
+		Logins:    logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
@@ -149,12 +149,12 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 		exited <- a.Read(ctx)
 	}()
 
-	dr.allowWritesToStart()
+	lr.allowWritesToStart()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-dr.writesDone:
+	case err := <-lr.writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -178,7 +178,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	checker.check()
 }
 
-func newTestDirReader(ctx context.Context, lineSetsToSend []string) *testDirReader {
+func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogReader {
 	exited := make(chan error, 2)
 
 	go func() {
@@ -209,12 +209,12 @@ func newTestDirReader(ctx context.Context, lineSetsToSend []string) *testDirRead
 			}
 
 			if scanner.Err() != nil {
-				writesDone <- fmt.Errorf("testDirReader bufio.Scanner failed - %w", scanner.Err())
+				writesDone <- fmt.Errorf("testLogReader bufio.Scanner failed - %w", scanner.Err())
 			}
 		}
 	}()
 
-	return &testDirReader{
+	return &testLogReader{
 		lines:      lines,
 		exited:     exited,
 		allowWrite: allowWrite,
@@ -222,22 +222,22 @@ func newTestDirReader(ctx context.Context, lineSetsToSend []string) *testDirRead
 	}
 }
 
-type testDirReader struct {
+type testLogReader struct {
 	lines      chan string
 	exited     chan error
 	allowWrite chan struct{}
 	writesDone chan error
 }
 
-func (o *testDirReader) allowWritesToStart() {
+func (o *testLogReader) allowWritesToStart() {
 	close(o.allowWrite)
 }
 
-func (o *testDirReader) Lines() <-chan string {
+func (o *testLogReader) Lines() <-chan string {
 	return o.lines
 }
 
-func (o *testDirReader) Exited() <-chan error {
+func (o *testLogReader) Exited() <-chan error {
 	return o.exited
 }
 
