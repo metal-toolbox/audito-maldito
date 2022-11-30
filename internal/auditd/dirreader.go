@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -177,7 +178,7 @@ func (o *logDirReader) loopWithError(ctx context.Context) error {
 			}
 
 			if done.filePath == mainLogPath {
-				mainLog.offset = done.numBytesRead
+				mainLog.setOffset(done.numBytesRead)
 			}
 
 			if initFileIndex > len(o.initFileNames)-1 {
@@ -225,6 +226,18 @@ type rotatingFile struct {
 	lines  chan<- string
 }
 
+func (o *rotatingFile) setOffset(i int64) {
+	atomic.StoreInt64(&o.offset, i)
+}
+
+func (o *rotatingFile) incOffsetBy(i int64) int64 {
+	return atomic.AddInt64(&o.offset, i)
+}
+
+func (o *rotatingFile) getOffset() int64 {
+	return atomic.LoadInt64(&o.offset)
+}
+
 // read attempts to read from the reader returned by the openFn field
 // if a fsnotify.Write occurs and updates the offset so that subsequent
 // reads resume where it left off.
@@ -245,7 +258,7 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 	// 2022/11/23 16:46:21 event: CHMOD  "/var/log/audit/audit.log"
 	switch op {
 	case fsnotify.Create, fsnotify.Remove, fsnotify.Rename:
-		o.offset = 0
+		o.setOffset(0)
 		return nil
 	case fsnotify.Write:
 		// break.
@@ -259,7 +272,7 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 	}
 	defer f.Close()
 
-	_, err = f.Seek(o.offset, io.SeekStart)
+	_, err = f.Seek(o.getOffset(), io.SeekStart)
 	if err != nil {
 		return err
 	}
@@ -269,7 +282,7 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 		return err
 	}
 
-	o.offset += numBytesRead
+	o.incOffsetBy(numBytesRead)
 
 	return nil
 }
