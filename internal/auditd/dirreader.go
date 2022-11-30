@@ -355,11 +355,7 @@ func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int6
 		}
 	}
 
-	if scanner.Err() != nil {
-		return counter.count, scanner.Err()
-	}
-
-	return counter.count, nil
+	return counter.count, scanner.Err()
 }
 
 // readCounter counts the number of bytes read from the inner reader.
