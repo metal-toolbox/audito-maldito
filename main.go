@@ -71,26 +71,26 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to ensure flush directory: %w", err)
 	}
 
-	// TODO: Figure out cancellation method that won't result in deadlock
-	// when waiting for underlying files to be closed.
-	logDirReader, err := auditd.LogDirReader(ctx, auditLogDirPath)
+	eg, groupCtx := errgroup.WithContext(ctx)
+
+	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(groupCtx, auditlogpath)
+	if auditfileerr != nil {
+		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
+	}
+
+	logDirReader, err := auditd.LogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
 		return fmt.Errorf("failed to create audit dir reader for '%s' - %w",
 			auditLogDirPath, err)
 	}
 
-	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(ctx, auditlogpath)
-	if auditfileerr != nil {
-		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
-	}
+	eg.Go(logDirReader.Wait)
 
 	lastReadJournalTS := lastReadJournalTimeStamp()
-
-	logger.Infoln("starting workers...")
-
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
 	logins := make(chan common.RemoteUserLogin)
-	eg, groupCtx := errgroup.WithContext(ctx)
+
+	logger.Infoln("starting workers...")
 
 	eg.Go(func() error {
 		jp := journald.Processor{

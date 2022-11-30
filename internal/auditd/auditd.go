@@ -2,7 +2,6 @@ package auditd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -43,8 +42,6 @@ type Auditd struct {
 	EventW *auditevent.EventWriter
 }
 
-// TODO: Should this code close the auditd reader on behalf of the caller?
-//
 // TODO: Write documentation about creating a splunk query that shows
 // only events after a user-start.
 func (o *Auditd) Read(ctx context.Context) error {
@@ -78,9 +75,9 @@ func (o *Auditd) Read(ctx context.Context) error {
 		}
 	}()
 
-	parseAuditdLogsDone := make(chan error, 1)
+	parseAuditLogsDone := make(chan error, 1)
 	go func() {
-		parseAuditdLogsDone <- parseAuditdLogs(o.LogReader, reassembler)
+		parseAuditLogsDone <- parseAuditLogs(ctx, o.LogReader, reassembler)
 	}()
 
 	tracker := newSessionTracker(o.EventW)
@@ -102,12 +99,8 @@ func (o *Auditd) Read(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
-		case err = <-parseAuditdLogsDone:
-			if err != nil {
-				return fmt.Errorf("auditd log parser exited unexpectedly with error - %w", err)
-			}
-
-			return errors.New("auditd log parser exited unexpectedly with nil error")
+		case err = <-parseAuditLogsDone:
+			return fmt.Errorf("audit log parser exited unexpectedly with error - %w", err)
 		case result := <-reassembleAuditdEvents:
 			if result.err != nil {
 				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
@@ -122,11 +115,13 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-func parseAuditdLogs(r LogReader, reass *libaudit.Reassembler) error {
+// parseAuditLogs parses audit log lines read from r and pushes them to reass
+// until the provided context is marked as done.
+func parseAuditLogs(ctx context.Context, r LogReader, reass *libaudit.Reassembler) error {
 	for {
 		select {
-		case err := <-r.Exited():
-			return fmt.Errorf("dir reader exited unexpectedly - %w", err)
+		case <-ctx.Done():
+			return ctx.Err()
 		case line := <-r.Lines():
 			if line == "" {
 				// Parsing an empty line results in this error:

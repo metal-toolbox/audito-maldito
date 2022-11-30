@@ -179,14 +179,6 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 }
 
 func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogReader {
-	exited := make(chan error, 2)
-
-	go func() {
-		<-ctx.Done()
-		exited <- ctx.Err()
-		close(exited)
-	}()
-
 	lines := make(chan string)
 	allowWrite := make(chan struct{})
 	writesDone := make(chan error, 1)
@@ -202,6 +194,7 @@ func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogRead
 			for scanner.Scan() {
 				select {
 				case <-ctx.Done():
+					writesDone <- ctx.Err()
 					return
 				case lines <- scanner.Text():
 					// continue.
@@ -216,7 +209,6 @@ func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogRead
 
 	return &testLogReader{
 		lines:      lines,
-		exited:     exited,
 		allowWrite: allowWrite,
 		writesDone: writesDone,
 	}
@@ -224,7 +216,6 @@ func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogRead
 
 type testLogReader struct {
 	lines      chan string
-	exited     chan error
 	allowWrite chan struct{}
 	writesDone chan error
 }
@@ -235,10 +226,6 @@ func (o *testLogReader) allowWritesToStart() {
 
 func (o *testLogReader) Lines() <-chan string {
 	return o.lines
-}
-
-func (o *testLogReader) Exited() <-chan error {
-	return o.exited
 }
 
 type testAuditEncoder struct {
