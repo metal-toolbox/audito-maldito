@@ -73,8 +73,8 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		LogReader: lr,
-		Logins:    logins,
+		Audits: lr.lines,
+		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
@@ -135,8 +135,8 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		LogReader: lr,
-		Logins:    logins,
+		Audits: lr.lines,
+		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
@@ -222,10 +222,6 @@ type testLogReader struct {
 
 func (o *testLogReader) allowWritesToStart() {
 	close(o.allowWrite)
-}
-
-func (o *testLogReader) Lines() <-chan string {
-	return o.lines
 }
 
 type testAuditEncoder struct {

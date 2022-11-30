@@ -15,16 +15,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-var _ LogReader = &logDirReader{}
-
-// LogReader abstracts reading audit log lines from one or more audit
-// log files.
-type LogReader interface {
-	// Lines returns a read-only channel that receives audit log
-	// lines each time a log file is written to.
-	Lines() <-chan string
-}
-
 // LogDirReader creates and starts a LogReader implementation for
 // the specified directory path (e.g., "/var/log/audit").
 //
@@ -120,7 +110,8 @@ type logDirReader struct {
 	err           error
 }
 
-// Lines implements the LogReader.Lines method.
+// Lines returns a read-only channel that receives audit log lines
+// each time a log file is written to.
 func (o *logDirReader) Lines() <-chan string {
 	return o.lines
 }

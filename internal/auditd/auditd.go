@@ -30,8 +30,8 @@ type Auditd struct {
 	// A zero time.Time means events are ignored.
 	After time.Time
 
-	// LogReader is the LogReader to read audit log lines from.
-	LogReader LogReader
+	// Audits receives audit log lines from one or more audit files.
+	Audits <-chan string
 
 	// Logins receives common.RemoteUserLogin when a user logs in
 	// remotely through a service like sshd.
@@ -76,7 +76,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	parseAuditLogsDone := make(chan error, 1)
 	go func() {
-		parseAuditLogsDone <- parseAuditLogs(ctx, o.LogReader, reassembler)
+		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler)
 	}()
 
 	tracker := newSessionTracker(o.EventW)
@@ -114,14 +114,14 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-// parseAuditLogs parses audit log lines read from r and pushes them to reass
-// until the provided context is marked as done.
-func parseAuditLogs(ctx context.Context, r LogReader, reass *libaudit.Reassembler) error {
+// parseAuditLogs parses audit log lines read from lines and pushes them
+// to reass until the provided context is marked as done.
+func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Reassembler) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case line := <-r.Lines():
+		case line := <-lines:
 			if line == "" {
 				// Parsing an empty line results in this error:
 				//    invalid audit message header
