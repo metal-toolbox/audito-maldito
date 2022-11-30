@@ -34,7 +34,7 @@ type Auditd struct {
 	// For example, using time.Now means all events that occurred
 	// before time.Now will be ignored.
 	//
-	// A zero time.Time means events are ignored.
+	// A zero time.Time means no events are ignored.
 	After time.Time
 
 	// Audits receives audit log lines from one or more audit files.
