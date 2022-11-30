@@ -145,7 +145,7 @@ func (o *logDirReader) loop(ctx context.Context) {
 	close(o.done)
 }
 
-// TODO: This ignores errors from the fsnotify.Watcher.
+// Note: This ignores errors from the fsnotify.Watcher.
 // The "Errors" channel appears to receive only non-fatal
 // errors, as a result I feel that ignoring them seems safe.
 func (o *logDirReader) loopWithError(ctx context.Context) error {
