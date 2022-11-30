@@ -263,18 +263,20 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 
 	f, err := o.openFn()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open rotating file - %w", err)
 	}
 	defer f.Close()
 
-	_, err = f.Seek(o.getOffset(), io.SeekStart)
+	off := o.getOffset()
+	_, err = f.Seek(off, io.SeekStart)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to seek to offset %d in rotating file - %w", off, err)
 	}
 
 	numBytesRead, err := readLines(ctx, f, o.lines)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read lines from rotating file starting at offset %d - %w",
+			off, err)
 	}
 
 	o.incOffsetBy(numBytesRead)
