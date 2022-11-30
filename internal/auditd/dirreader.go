@@ -220,6 +220,8 @@ type initialFileRead struct {
 	err          error
 }
 
+// rotatingFile tails lines from a file that is rotated by
+// a logging mechanism.
 type rotatingFile struct {
 	openFn func() (io.ReadSeekCloser, error)
 	offset int64
