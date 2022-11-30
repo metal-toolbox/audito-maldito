@@ -250,7 +250,7 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 	// 2022/11/23 16:46:21 event: CREATE "/var/log/audit/audit.log.1"
 	// 2022/11/23 16:46:21 event: CREATE "/var/log/audit/audit.log"
 	// 2022/11/23 16:46:21 event: CHMOD  "/var/log/audit/audit.log"
-	switch op {
+	switch op { //nolint: No, there is a default case.
 	case fsnotify.Create, fsnotify.Remove, fsnotify.Rename:
 		o.setOffset(0)
 		return nil
