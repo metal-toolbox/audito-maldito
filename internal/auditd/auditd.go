@@ -155,6 +155,8 @@ func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Re
 	}
 }
 
+var _ libaudit.Stream = &reassemblerCB{}
+
 // reassemblerCB implements the libaudit.Stream interface.
 type reassemblerCB struct {
 	ctx     context.Context //nolint
