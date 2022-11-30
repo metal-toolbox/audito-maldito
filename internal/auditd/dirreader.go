@@ -84,7 +84,7 @@ func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
 
 	// Filter unwanted files and directories.
 	for _, entry := range dirEntries {
-		if entry.IsDir() || !strings.Contains(entry.Name(), "audit.log") {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "audit.log") {
 			continue
 		}
 
