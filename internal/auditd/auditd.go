@@ -14,6 +14,13 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
+// libaudit variables.
+const (
+	maxEventsInFlight   = 1000
+	eventTimeout        = 2 * time.Second
+	reassemblerInterval = 500 * time.Millisecond
+)
+
 var logger *zap.SugaredLogger
 
 func SetLogger(l *zap.SugaredLogger) {
@@ -44,9 +51,6 @@ type Auditd struct {
 // TODO: Write documentation about creating a splunk query that shows
 // only events after a user-start.
 func (o *Auditd) Read(ctx context.Context) error {
-	// TODO: Revisit these settings.
-	const maxEventsInFlight = 1000
-	const eventTimeout = 2 * time.Second
 	reassembleAuditdEvents := make(chan reassembleAuditdEventResult)
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
@@ -59,20 +63,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 	defer reassembler.Close()
 
-	go func() {
-		// This code comes from the go-libaudit example in:
-		// cmd/auparse/auparse.go
-		t := time.NewTicker(500 * time.Millisecond) //nolint
-		defer t.Stop()
-
-		for range t.C {
-			if reassembler.Maintain() != nil {
-				// Maintain returns non-nil error
-				// if reassembler was closed.
-				return
-			}
-		}
-	}()
+	go maintainReassemblerLoop(ctx, reassembler)
 
 	parseAuditLogsDone := make(chan error, 1)
 	go func() {
@@ -109,6 +100,27 @@ func (o *Auditd) Read(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
 					result.event.Type, result.event.Sequence, err)
+			}
+		}
+	}
+}
+
+// maintainReassemblerLoop calls libaudit.Reassembler.Maintain in a loop.
+func maintainReassemblerLoop(ctx context.Context, reassembler *libaudit.Reassembler) {
+	// This code comes from the go-libaudit example in:
+	// cmd/auparse/auparse.go
+	t := time.NewTicker(reassemblerInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if reassembler.Maintain() != nil {
+				// Maintain returns non-nil error
+				// if reassembler was closed.
+				return
 			}
 		}
 	}
