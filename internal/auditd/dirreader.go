@@ -67,10 +67,13 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 // sortLogNamesOldToNew filters dirEntries for file names that look like
 // audit logs and organizes them such that the oldest logs appear at index
 // zero in the returned slice. E.g.,
-//    0           1           2           3           4
-//   [audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
+//
+//  0           1           2           3           4
+//  [audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
 func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
-	var oldestToNew []string
+	// The linter told me to pre-allocate this slice despite there
+	// being no way to know the actual size in advance. Whatever.
+	oldestToNew := make([]string, len(dirEntries))
 
 	// Filter unwanted files and directories.
 	for _, entry := range dirEntries {
