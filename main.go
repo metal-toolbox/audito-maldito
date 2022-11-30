@@ -78,7 +78,7 @@ func mainWithErr() error {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	logDirReader, err := auditd.LogDirReader(groupCtx, auditLogDirPath)
+	logDirReader, err := auditd.StartLogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
 		return fmt.Errorf("failed to create audit dir reader for '%s' - %w",
 			auditLogDirPath, err)

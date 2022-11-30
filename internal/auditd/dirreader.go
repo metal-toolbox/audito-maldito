@@ -15,13 +15,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// LogDirReader creates and starts a LogReader implementation for
+// StartLogDirReader creates and starts a LogDirReader for
 // the specified directory path (e.g., "/var/log/audit").
 //
 // The reader can be stopped by cancelling the provided context.
 // After cancellation, users should call Wait to ensure any open
 // files and resources are released.
-func LogDirReader(ctx context.Context, dirPath string) (*logDirReader, error) {
+func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, error) {
 	if dirPath == "" {
 		return nil, errors.New("directory path is empty")
 	}
@@ -50,7 +50,7 @@ func LogDirReader(ctx context.Context, dirPath string) (*logDirReader, error) {
 		return nil, fmt.Errorf("failed to add dir path '%s' to watcher - %w", dirPath, err)
 	}
 
-	r := &logDirReader{
+	r := &LogDirReader{
 		dirPath:       dirPath,
 		initFileNames: sortLogNamesOldToNew(dirEntries),
 		watcher:       &fsnotifyWatcher{watcher: watcher},
@@ -99,8 +99,9 @@ func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
 	return oldestToNew
 }
 
-// logDirReader implements the LogReader interface.
-type logDirReader struct {
+// LogDirReader reads audit logs from a directory and tails the active
+// audit log. It also gracefully handles log file rotation.
+type LogDirReader struct {
 	dirPath       string
 	initFileNames []string
 	watcher       fsWatcher
@@ -112,22 +113,22 @@ type logDirReader struct {
 
 // Lines returns a read-only channel that receives audit log lines
 // each time a log file is written to.
-func (o *logDirReader) Lines() <-chan string {
+func (o *LogDirReader) Lines() <-chan string {
 	return o.lines
 }
 
 // Wait waits for the log reader to exit. Users should call this method
-// to ensure the LogReader's resources have been released (e.g., that
+// to ensure the LogDirReader's resources have been released (e.g., that
 // open files have been closed).
 //
 // The returned error is always non-nil. When cancelled, the error must
 // contain context.Canceled.
-func (o *logDirReader) Wait() error {
+func (o *LogDirReader) Wait() error {
 	<-o.done
 	return o.err
 }
 
-func (o *logDirReader) loop(ctx context.Context) {
+func (o *LogDirReader) loop(ctx context.Context) {
 	err := o.loopWithError(ctx)
 
 	_ = o.watcher.Close()
@@ -139,7 +140,7 @@ func (o *logDirReader) loop(ctx context.Context) {
 // Note: This ignores errors from the fsnotify.Watcher.
 // The "Errors" channel appears to receive only non-fatal
 // errors, as a result I feel that ignoring them seems safe.
-func (o *logDirReader) loopWithError(ctx context.Context) error {
+func (o *LogDirReader) loopWithError(ctx context.Context) error {
 	initFileDone := make(chan initialFileRead, 1)
 	if len(o.initFileNames) > 0 {
 		// Force the initFileDone code to run.
