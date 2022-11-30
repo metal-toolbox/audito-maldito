@@ -253,10 +253,6 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 		return nil
 	}
 
-	// TODO: Do we need retry logic? What will be the constraints?
-	// My initial thought is "no", as we can just let k8s
-	// restart the process if an error occurs... but then
-	// again, will this always be run under k8s?
 	f, err := o.openFn()
 	if err != nil {
 		return err
