@@ -71,9 +71,7 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 //  0           1           2           3           4
 //  [audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
 func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
-	// The linter told me to pre-allocate this slice despite there
-	// being no way to know the actual size in advance. Whatever.
-	oldestToNew := make([]string, len(dirEntries))
+	var oldestToNew []string //nolint: No way to know size ahead of time.
 
 	// Filter unwanted files and directories.
 	for _, entry := range dirEntries {
