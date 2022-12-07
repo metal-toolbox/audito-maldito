@@ -68,10 +68,13 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 // audit logs and organizes them such that the oldest logs appear at index
 // zero in the returned slice. E.g.,
 //
-//  0           1           2           3           4
-//  [audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
+//	0           1           2           3           4
+//	[audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
 func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
-	var oldestToNew []string //nolint: No way to know size ahead of time.
+	// We pre-allocate the slice to the maximum possible capacity size
+	// We don't know how many files will be filtered out, so we can't
+	// pre-allocate the slice to the exact size (we don't touch the length).
+	oldestToNew := make([]string, 0, len(dirEntries))
 
 	// Filter unwanted files and directories.
 	for _, entry := range dirEntries {
@@ -251,7 +254,9 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 	// 2022/11/23 16:46:21 event: CREATE "/var/log/audit/audit.log.1"
 	// 2022/11/23 16:46:21 event: CREATE "/var/log/audit/audit.log"
 	// 2022/11/23 16:46:21 event: CHMOD  "/var/log/audit/audit.log"
-	switch op { //nolint: No, there is a default case.
+	//
+	//nolint:exhaustive // We only care about a subset of the fsnotify events.
+	switch op {
 	case fsnotify.Create, fsnotify.Remove, fsnotify.Rename:
 		o.setOffset(0)
 		return nil
