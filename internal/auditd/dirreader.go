@@ -196,7 +196,9 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 			initFileIndex++
 		case event := <-o.watcher.Events():
 			// TODO: Should this be buffered with a time.Timer?
-			if len(o.initFileNames) == 0 && event.Name == mainLogPath {
+			if len(o.initFileNames) == 0 &&
+				len(event.Name) == len(mainLogPath) &&
+				event.Name == mainLogPath {
 				// TODO: Should we read in a separate thread?
 				// Reads are usually blocking operations that
 				// can only be interrupted by closing the
