@@ -5,9 +5,10 @@ go 1.19
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/elastic/go-libaudit/v2 v2.3.2
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/metal-toolbox/auditevent v0.5.1
 	github.com/stretchr/testify v1.8.1
-	go.uber.org/zap v1.23.0
+	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.1.0
 )
 
@@ -15,7 +16,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
