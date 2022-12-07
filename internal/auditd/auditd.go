@@ -16,9 +16,10 @@ import (
 
 // libaudit variables.
 const (
-	maxEventsInFlight   = 1000
-	eventTimeout        = 2 * time.Second
-	reassemblerInterval = 500 * time.Millisecond
+	maxEventsInFlight        = 1000
+	eventTimeout             = 2 * time.Second
+	reassemblerInterval      = 500 * time.Millisecond
+	staleDataCleanupInterval = 1 * time.Minute
 )
 
 var logger *zap.SugaredLogger
@@ -72,7 +73,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	tracker := newSessionTracker(o.EventW)
 
-	staleDataTicker := time.NewTicker(time.Minute)
+	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
 
 	for {
@@ -80,7 +81,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-staleDataTicker.C:
-			aMinuteAgo := time.Now().Add(-time.Minute)
+			aMinuteAgo := time.Now().Add(-staleDataCleanupInterval)
 
 			tracker.deleteUsersWithoutLoginsBefore(aMinuteAgo)
 			tracker.deleteRemoteUserLoginsBefore(aMinuteAgo)
