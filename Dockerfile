@@ -1,6 +1,6 @@
 FROM registry.fedoraproject.org/fedora-minimal:38 AS builder
 
-RUN microdnf install -y systemd-devel golang && microdnf clean all
+RUN microdnf install -y systemd-devel golang git && microdnf clean all
 
 WORKDIR /go/src/audito-maldito
 
