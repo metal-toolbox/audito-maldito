@@ -12,8 +12,170 @@ import (
 	"os"
 	"testing"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestRotatingFile_Lifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	tf := testFileWithRandomLines(t)
+
+	origData := bytes.NewBuffer(nil)
+	origData.Write(tf.data)
+
+	bufReady := make(chan *bytes.Buffer, 1)
+	linesRead := make(chan string)
+
+	go func() {
+		lines := bytes.NewBuffer(nil)
+
+		for {
+			select {
+			case <-ctx.Done():
+				bufReady <- lines
+				return
+			case l := <-linesRead:
+				lines.WriteString(l)
+				lines.WriteByte('\n')
+			}
+		}
+	}()
+
+	rf := &rotatingFile{
+		openFn: func() (io.ReadSeekCloser, error) {
+			tf.closed = false
+			return tf, nil
+		},
+		lines: linesRead,
+	}
+
+	err := rf.read(ctx, fsnotify.Create)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rf.read(ctx, fsnotify.Write)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < int(intn(t, 100)); i++ {
+		switch intn(t, 2) {
+		case 0:
+			tf.Truncate()
+
+			err = rf.read(ctx, fsnotify.Remove)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = rf.read(ctx, fsnotify.Create)
+			if err != nil {
+				t.Fatal(err)
+			}
+		case 1:
+			more := randomLines(t)
+			tf.data = append(tf.data, more...)
+			origData.Write(more)
+
+			err = rf.read(ctx, fsnotify.Write)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	cancelFn()
+
+	writtenBuf := <-bufReady
+
+	assert.Equal(t, origData.String(), writtenBuf.String())
+}
+
+func TestRotatingFile_OpenErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	expErr := errors.New("got anything to declare")
+
+	rf := &rotatingFile{
+		openFn: func() (io.ReadSeekCloser, error) {
+			return nil, expErr
+		},
+		lines: make(chan string),
+	}
+
+	err := rf.read(ctx, fsnotify.Create)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rf.read(ctx, fsnotify.Write)
+	assert.ErrorIs(t, err, expErr)
+}
+
+func TestRotatingFile_SeekErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	expErr := errors.New("AAAAAAAA")
+
+	tf := &testFile{
+		seekErr: expErr,
+	}
+
+	rf := &rotatingFile{
+		openFn: func() (io.ReadSeekCloser, error) {
+			return tf, nil
+		},
+		lines: make(chan string),
+	}
+
+	err := rf.read(ctx, fsnotify.Create)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rf.read(ctx, fsnotify.Write)
+	assert.ErrorIs(t, err, expErr)
+}
+
+func TestRotatingFile_ReadLinesErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	expErr := errors.New("4831c099b03b48bf2f2f62696e2f736848c1ef08574889e757524889e60f05")
+
+	tf := &testFile{
+		data:    []byte{0xf0, 0x0d},
+		readErr: expErr,
+	}
+
+	rf := &rotatingFile{
+		openFn: func() (io.ReadSeekCloser, error) {
+			return tf, nil
+		},
+		lines: make(chan string),
+	}
+
+	err := rf.read(ctx, fsnotify.Create)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rf.read(ctx, fsnotify.Write)
+	assert.ErrorIs(t, err, expErr)
+}
 
 func TestOSFileSystem_Open(t *testing.T) {
 	t.Parallel()
@@ -82,9 +244,11 @@ func TestReadFilePathLines(t *testing.T) {
 func TestReadFilePathLines_OpenErr(t *testing.T) {
 	t.Parallel()
 
-	tfs := &testFileSystem{}
-
-	_, err := tfs.Open("/keepin/the/mic/warm/against/the/norm")
+	_, err := readFilePathLines(
+		context.Background(),
+		&testFileSystem{},
+		"/keepin/the/mic/warm/against/the/norm",
+		make(chan string))
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected error type: %T - got: %T", os.ErrNotExist, err)
 	}
@@ -136,14 +300,12 @@ func TestReadLines_ReadErr(t *testing.T) {
 	defer cancelFn()
 
 	tf := &testFile{
-		err: errors.New("smash"),
+		readErr: errors.New("smash"),
 	}
 
 	_, err := readLines(ctx, tf, nil)
 	cancelFn()
-	if !errors.Is(err, tf.err) {
-		t.Fatalf("expected error type: %T - got: %T", tf.err, err)
-	}
+	assert.ErrorIs(t, err, tf.readErr)
 }
 
 func TestReadLines_Cancel(t *testing.T) {
@@ -221,15 +383,16 @@ func (o *testFileSystem) Open(filePath string) (io.ReadSeekCloser, error) {
 
 // testFile implements the io.ReadSeekCloser interface.
 type testFile struct {
-	err    error
-	closed bool
-	offset int
-	data   []byte
+	readErr error
+	seekErr error
+	closed  bool
+	offset  int
+	data    []byte
 }
 
 func (o *testFile) Read(p []byte) (n int, err error) {
-	if o.err != nil {
-		return 0, o.err
+	if o.readErr != nil {
+		return 0, o.readErr
 	}
 
 	if o.closed {
@@ -248,8 +411,8 @@ func (o *testFile) Read(p []byte) (n int, err error) {
 }
 
 func (o *testFile) Seek(offset int64, whence int) (int64, error) {
-	if o.err != nil {
-		return 0, o.err
+	if o.seekErr != nil {
+		return 0, o.seekErr
 	}
 
 	if o.closed {
@@ -280,6 +443,11 @@ func (o *testFile) Seek(offset int64, whence int) (int64, error) {
 	o.offset = nextOffset
 
 	return int64(nextOffset), nil
+}
+
+func (o *testFile) Truncate() {
+	o.data = nil
+	o.offset = 0
 }
 
 func (o *testFile) Close() error {
