@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	mathrand "math/rand"
+	"math/big"
 	"os"
 	"testing"
 
@@ -97,7 +96,7 @@ func TestReadLines(t *testing.T) {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 
-	tf := testFileWithRandomLines(newSeededMathRand(t), t)
+	tf := testFileWithRandomLines(t)
 
 	bufReady := make(chan *bytes.Buffer, 1)
 	linesRead := make(chan string)
@@ -163,17 +162,17 @@ func TestReadLines_Cancel(t *testing.T) {
 	}
 }
 
-func testFileWithRandomLines(r *mathrand.Rand, t *testing.T) *testFile {
-	return &testFile{data: randomLines(r, t)}
+func testFileWithRandomLines(t *testing.T) *testFile {
+	return &testFile{data: randomLines(t)}
 }
 
-func randomLines(r *mathrand.Rand, t *testing.T) []byte {
-	numLines := r.Intn(100)
+func randomLines(t *testing.T) []byte {
+	numLines := int(intn(t, 100))
 
 	var data []byte
 
 	for i := 0; i < numLines; i++ {
-		lineBytes := r.Intn(400)
+		lineBytes := intn(t, 400)
 
 		if lineBytes > 0 {
 			b := make([]byte, lineBytes)
@@ -189,6 +188,15 @@ func randomLines(r *mathrand.Rand, t *testing.T) []byte {
 	}
 
 	return data
+}
+
+func intn(t *testing.T, max int64) int64 {
+	i, err := rand.Int(rand.Reader, big.NewInt(max))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return i.Int64()
 }
 
 // testFileSystem implements the fileSystem interface.
@@ -271,16 +279,4 @@ func (o *testFile) Seek(offset int64, whence int) (int64, error) {
 func (o *testFile) Close() error {
 	o.closed = true
 	return nil
-}
-
-func newSeededMathRand(t *testing.T) *mathrand.Rand {
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	seed := binary.BigEndian.Uint64(b)
-
-	return mathrand.New(mathrand.NewSource(int64(seed)))
 }
