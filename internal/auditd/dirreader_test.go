@@ -163,10 +163,14 @@ func TestReadLines_Cancel(t *testing.T) {
 }
 
 func testFileWithRandomLines(t *testing.T) *testFile {
+	t.Helper()
+
 	return &testFile{data: randomLines(t)}
 }
 
 func randomLines(t *testing.T) []byte {
+	t.Helper()
+
 	numLines := int(intn(t, 100))
 
 	var data []byte
@@ -191,6 +195,8 @@ func randomLines(t *testing.T) []byte {
 }
 
 func intn(t *testing.T, max int64) int64 {
+	t.Helper()
+
 	i, err := rand.Int(rand.Reader, big.NewInt(max))
 	if err != nil {
 		t.Fatal(err)
