@@ -8,13 +8,243 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/big"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestSortLogNamesOldToNew(t *testing.T) {
+	t.Parallel()
+
+	in := []fs.DirEntry{
+		&testDirEntry{isDir: false, name: "audit.log.3"},
+		&testDirEntry{isDir: false, name: "audit.log.2"},
+		&testDirEntry{isDir: false, name: "audit.log.4"},
+		&testDirEntry{isDir: false, name: "audit.log"},
+		&testDirEntry{isDir: false, name: "audit.log.1"},
+	}
+
+	result := sortLogNamesOldToNew(in)
+
+	assert.Len(t, result, len(in))
+
+	for i, s := range result {
+		switch i {
+		case 0:
+			assert.Equal(t, s, "audit.log.4")
+		case 1:
+			assert.Equal(t, s, "audit.log.3")
+		case 2:
+			assert.Equal(t, s, "audit.log.2")
+		case 3:
+			assert.Equal(t, s, "audit.log.1")
+		case 4:
+			assert.Equal(t, s, "audit.log")
+		default:
+			t.Fatalf("unknown index: %d", i)
+		}
+	}
+}
+
+func TestSortLogNamesOldToNew_Empty(t *testing.T) {
+	t.Parallel()
+
+	result := sortLogNamesOldToNew(nil)
+
+	assert.Nil(t, result)
+}
+
+func TestSortLogNamesOldToNew_NoDirs(t *testing.T) {
+	t.Parallel()
+
+	result := sortLogNamesOldToNew([]fs.DirEntry{
+		&testDirEntry{isDir: false, name: "gunner is a dog, not a directory :("},
+		&testDirEntry{isDir: false, name: "nope.avi"},
+		&testDirEntry{isDir: false, name: "this deal is getting worse all the time"},
+	})
+
+	assert.Nil(t, result)
+}
+
+func TestSortLogNamesOldToNew_NoMatchingPrefixes(t *testing.T) {
+	t.Parallel()
+
+	result := sortLogNamesOldToNew([]fs.DirEntry{
+		&testDirEntry{isDir: true, name: "gunner is a dog, not a directory :("},
+		&testDirEntry{isDir: true, name: "nope.avi"},
+		&testDirEntry{isDir: true, name: "this deal is getting worse all the time"},
+	})
+
+	assert.Nil(t, result)
+}
+
+func TestLogDirReader_Lines(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	ldr := newTestLogDirReader(ctx, &testFSWatcher{events: make(chan fsnotify.Event)}, &testFileSystem{})
+
+	if ldr.lines != ldr.Lines() {
+		t.Fatalf("expected: %T - got: %T", ldr.lines, ldr.Lines())
+	}
+}
+
+func TestLogDirReader_Wait(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	ldr := newTestLogDirReader(ctx, &testFSWatcher{events: make(chan fsnotify.Event)}, &testFileSystem{})
+
+	cancelFn()
+
+	err := ldr.Wait()
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestLogDirReader_OpenMainLogFileErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFn()
+
+	fsEvents := make(chan fsnotify.Event, 1)
+	fsEvents <- fsnotify.Event{
+		Name: "/audit.log",
+		Op:   fsnotify.Write,
+	}
+
+	ldr := newTestLogDirReader(
+		ctx,
+		&testFSWatcher{events: fsEvents},
+		&testFileSystem{})
+
+	err := ldr.Wait()
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestLogDirReader_InitialFileErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFn()
+
+	const filePath = "/audit.log"
+	expErr := errors.New("i'm cia")
+
+	tfs := &testFileSystem{
+		filePathsToFiles: map[string]*testFile{
+			filePath: {
+				readErr: expErr,
+				data:    []byte{0x06, 0x66},
+			},
+		},
+	}
+
+	ldr := newTestLogDirReader(
+		ctx,
+		&testFSWatcher{events: make(chan fsnotify.Event)},
+		tfs,
+		filepath.Base(filePath))
+
+	err := ldr.Wait()
+	assert.ErrorIs(t, err, expErr)
+}
+
+func TestLogDirReader_InitialFileSuccess(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFn()
+
+	expData := bytes.NewBuffer(nil)
+	numFiles := int(intn(t, 10))
+	initialFileNames := make([]string, numFiles)
+	tfs := &testFileSystem{
+		filePathsToFiles: make(map[string]*testFile, numFiles),
+	}
+
+	for i := 0; i < numFiles; i++ {
+		var fileName string
+
+		fileI := numFiles - 1 - i
+		if fileI == 0 {
+			fileName = "audit.log"
+		} else {
+			fileName = fmt.Sprintf("audit.log.%d", fileI)
+		}
+
+		tf := testFileWithRandomLines(t)
+		expData.Write(tf.data)
+
+		initialFileNames[i] = fileName
+		tfs.filePathsToFiles["/"+fileName] = tf
+	}
+
+	ldr := newTestLogDirReader(
+		ctx,
+		&testFSWatcher{events: make(chan fsnotify.Event)},
+		tfs,
+		initialFileNames...)
+
+	resultReady := make(chan *bytes.Buffer, 1)
+
+	go func() {
+		lines := bytes.NewBuffer(nil)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case l := <-ldr.Lines():
+				lines.WriteString(l)
+				lines.WriteByte('\n')
+
+				if lines.Len() >= expData.Len() {
+					resultReady <- lines
+					return
+				}
+			}
+		}
+	}()
+
+	errs := make(chan error, 1)
+
+	go func() {
+		errs <- ldr.Wait()
+	}()
+
+	select {
+	case err := <-errs:
+		t.Fatal(err)
+	case result := <-resultReady:
+		assert.Equal(t, expData.String(), result.String())
+	}
+}
+
+func newTestLogDirReader(ctx context.Context, fsw fsWatcher, fsi fileSystem, initFileNames ...string) *LogDirReader {
+	ldr := &LogDirReader{
+		dirPath:       "/",
+		initFileNames: initFileNames,
+		watcher:       fsw,
+		fs:            fsi,
+		lines:         make(chan string),
+		done:          make(chan struct{}),
+	}
+
+	go ldr.loop(ctx)
+
+	return ldr
+}
 
 func TestRotatingFile_Lifecycle(t *testing.T) {
 	t.Parallel()
@@ -356,6 +586,31 @@ func randomLines(t *testing.T) []byte {
 	return data
 }
 
+// testDirEntry implements the fs.DirEntry interface.
+type testDirEntry struct {
+	name  string
+	isDir bool
+	t     fs.FileMode
+	info  fs.FileInfo
+	iErr  error
+}
+
+func (o *testDirEntry) Name() string {
+	return o.name
+}
+
+func (o *testDirEntry) IsDir() bool {
+	return o.isDir
+}
+
+func (o *testDirEntry) Type() fs.FileMode {
+	return o.t
+}
+
+func (o *testDirEntry) Info() (fs.FileInfo, error) {
+	return o.info, o.iErr
+}
+
 func intn(t *testing.T, max int64) int64 {
 	t.Helper()
 
@@ -365,6 +620,19 @@ func intn(t *testing.T, max int64) int64 {
 	}
 
 	return i.Int64()
+}
+
+// testFSWatcher implements the fsWatcher interface.
+type testFSWatcher struct {
+	events chan fsnotify.Event
+}
+
+func (o *testFSWatcher) Events() <-chan fsnotify.Event {
+	return o.events
+}
+
+func (o *testFSWatcher) Close() error {
+	return nil
 }
 
 // testFileSystem implements the fileSystem interface.
