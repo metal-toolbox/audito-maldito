@@ -167,7 +167,7 @@ func TestLogDirReader_InitialFileSuccess(t *testing.T) {
 	defer cancelFn()
 
 	expData := bytes.NewBuffer(nil)
-	numFiles := int(intn(t, 10))
+	numFiles := int(intn(t, 1, 10))
 	initialFileNames := make([]string, numFiles)
 	tfs := &testFileSystem{
 		filePathsToFiles: make(map[string]*testFile, numFiles),
@@ -292,8 +292,8 @@ func TestRotatingFile_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < int(intn(t, 100)); i++ {
-		switch intn(t, 2) {
+	for i := 0; i < int(intn(t, 0, 100)); i++ {
+		switch intn(t, 0, 2) {
 		case 0:
 			tf.Truncate()
 
@@ -562,12 +562,12 @@ func testFileWithRandomLines(t *testing.T) *testFile {
 func randomLines(t *testing.T) []byte {
 	t.Helper()
 
-	numLines := int(intn(t, 100))
+	numLines := int(intn(t, 0, 100))
 
 	var data []byte
 
 	for i := 0; i < numLines; i++ {
-		lineBytes := intn(t, 400)
+		lineBytes := intn(t, 0, 400)
 
 		if lineBytes > 0 {
 			b := make([]byte, lineBytes)
@@ -610,15 +610,23 @@ func (o *testDirEntry) Info() (fs.FileInfo, error) {
 	return o.info, o.iErr
 }
 
-func intn(t *testing.T, max int64) int64 {
+// intn returns a random number between min and max.
+func intn(t *testing.T, min int64, max int64) int64 {
 	t.Helper()
 
-	i, err := rand.Int(rand.Reader, big.NewInt(max))
+retry:
+	bigI, err := rand.Int(rand.Reader, big.NewInt(max))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return i.Int64()
+	i := bigI.Int64()
+
+	if i < min {
+		goto retry
+	}
+
+	return i
 }
 
 // testFSWatcher implements the fsWatcher interface.
