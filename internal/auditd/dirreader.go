@@ -68,7 +68,7 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 // audit logs and organizes them such that the oldest logs appear at index
 // zero in the returned slice. E.g.,
 //
-//	0           1           2           3           4
+//	 0           1           2           3           4
 //	[audit.log.4 audit.log.3 audit.log.2 audit.log.1 audit.log]
 func sortLogNamesOldToNew(dirEntries []os.DirEntry) []string {
 	// We pre-allocate the slice to the maximum possible capacity size
