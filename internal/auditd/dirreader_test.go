@@ -218,7 +218,6 @@ func TestLogDirReader_InitialFileSuccess(t *testing.T) {
 	}()
 
 	errs := make(chan error, 1)
-
 	go func() {
 		errs <- ldr.Wait()
 	}()
