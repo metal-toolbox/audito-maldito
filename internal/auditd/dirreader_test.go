@@ -611,7 +611,7 @@ func (o *testDirEntry) Info() (fs.FileInfo, error) {
 }
 
 // intn returns a random number between min and max.
-func intn(t *testing.T, min int64, max int64) int64 {
+func intn(t *testing.T, min, max int64) int64 {
 	t.Helper()
 
 retry:

@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 func TestUser_ToAuditEvent(t *testing.T) {
@@ -100,7 +101,7 @@ func TestUser_ToAuditEvent_Fail(t *testing.T) {
 				Primary:   "1",
 				Secondary: "2",
 			},
-			How: "how?",
+			How: "31c066ba0e276681ea0627b037cd80",
 		},
 	}
 
@@ -115,6 +116,7 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
+	//nolint:dupl // The contents do not matter, why do I need to explain this?
 	u := user{
 		added:  time.Now(),
 		srcPID: 666,
@@ -156,7 +158,7 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "01608fe216ff2fe178461030ff21ff310131082701df4040012701df2f726f6f742f7077656364",
 				},
 			},
 			{
@@ -170,7 +172,11 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "eb2b5e31c088460b88462950b0095031c05650b005cd8089c3" +
+						"6a1d8d460c50535031c0b004cd8031c0b001cd80e8d0ffffff" +
+						"2f746d702f706173737764307730307730303a3a303a303a77" +
+						"30307730303a2f3a2f62696e2f73680a30ffffffffffffffff" +
+						"ffffffffffffffffffffffff",
 				},
 			},
 			{
@@ -184,7 +190,7 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "0x6631c068090066b8ffffffff66506631c0b0256650cd80",
 				},
 			},
 		},
@@ -214,6 +220,7 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 
+	//nolint:dupl // The contents do not matter, why do I need to explain this?
 	u := user{
 		added:  time.Now(),
 		srcPID: 666,
@@ -241,7 +248,7 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "f00dhow?",
 				},
 			},
 			{
@@ -255,7 +262,7 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "f00d01608fe216ff2fe178461030ff21ff310131082701df4040012701df2f726f6f742f7077656364",
 				},
 			},
 			{
@@ -269,7 +276,11 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "f00deb2b5e31c088460b88462950b0095031c05650b005cd8089c3" +
+						"6a1d8d460c50535031c0b004cd8031c0b001cd80e8d0ffffff" +
+						"2f746d702f706173737764307730307730303a3a303a303a77" +
+						"30307730303a2f3a2f62696e2f73680a30ffffffffffffffff" +
+						"ffffffffffffffffffffffff",
 				},
 			},
 			{
@@ -283,7 +294,7 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 						Primary:   "1",
 						Secondary: "2",
 					},
-					How: "how?",
+					How: "f00d0x6631c068090066b8ffffffff66506631c0b0256650cd80",
 				},
 			},
 		},
