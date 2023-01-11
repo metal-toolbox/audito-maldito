@@ -18,6 +18,13 @@ unit-test:
 	@echo "Running unit tests"
 	@go test -v ./...
 
+.PHONY: coverage
+coverage:
+	@echo Generating coverage report...
+	@go test -timeout 30s ./... -coverprofile=coverage.out -covermode=atomic
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out
+
 .PHONY: lint
 lint:
 	@echo "Running linter"
