@@ -1,12 +1,12 @@
 package common
 
-type remoteUserLoginValidateError struct {
+type RemoteUserLoginValidateError struct {
 	noEvent bool
 	noPID   bool
 	noCred  bool
 	message string
 }
 
-func (o remoteUserLoginValidateError) Error() string {
+func (o RemoteUserLoginValidateError) Error() string {
 	return o.message
 }

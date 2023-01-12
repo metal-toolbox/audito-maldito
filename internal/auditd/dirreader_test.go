@@ -567,22 +567,33 @@ func randomLines(t *testing.T) []byte {
 	var data []byte
 
 	for i := 0; i < numLines; i++ {
-		lineBytes := intn(t, 0, 400)
-
-		if lineBytes > 0 {
-			b := make([]byte, lineBytes)
-			_, err := rand.Read(b)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			data = append(data, hex.EncodeToString(b)...)
+		lineBytes := randomBytes(t, 0, 400)
+		if lineBytes != nil {
+			data = append(data, hex.EncodeToString(lineBytes)...)
 		}
 
 		data = append(data, '\n')
 	}
 
 	return data
+}
+
+func randomBytes(t *testing.T, min, max int64) []byte {
+	t.Helper()
+
+	numBytes := intn(t, min, max)
+
+	if numBytes == 0 {
+		return nil
+	}
+
+	b := make([]byte, numBytes)
+	_, err := rand.Read(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return b
 }
 
 // testDirEntry implements the fs.DirEntry interface.

@@ -301,7 +301,8 @@ type fsWatcher interface {
 	Close() error
 }
 
-// fsnotifyWatcher implements the fsWatcher for the fsnotify.Watcher type.
+// fsnotifyWatcher implements the fsWatcher interface for the
+// fsnotify.Watcher type.
 type fsnotifyWatcher struct {
 	watcher *fsnotify.Watcher
 }

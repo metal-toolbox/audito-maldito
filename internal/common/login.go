@@ -10,21 +10,21 @@ type RemoteUserLogin struct {
 
 func (o RemoteUserLogin) Validate() error {
 	if o.Source == nil {
-		return &remoteUserLoginValidateError{
+		return &RemoteUserLoginValidateError{
 			noEvent: true,
 			message: "audit event is nil",
 		}
 	}
 
 	if o.PID == 0 {
-		return &remoteUserLoginValidateError{
+		return &RemoteUserLoginValidateError{
 			noPID:   true,
 			message: "pid is zero",
 		}
 	}
 
 	if o.CredUserID == "" {
-		return &remoteUserLoginValidateError{
+		return &RemoteUserLoginValidateError{
 			noCred:  true,
 			message: "user id is empty",
 		}
