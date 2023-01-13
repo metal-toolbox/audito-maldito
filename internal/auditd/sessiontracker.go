@@ -90,6 +90,9 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 	u, hasSession := o.sessIDsToUsers[event.Session]
 	if hasSession {
+		// Either write the audit event to the event writer
+		// or cache it for later.
+
 		if u.hasRUL {
 			// It looks like AUDIT_CRED_DISP indicates the
 			// canonical end of a user session - but, there is
@@ -107,10 +110,21 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 			return o.eventWriter.Write(u.toAuditEvent(event))
 		}
 	} else {
+		// Create a new audit session.
+
+		if event.Type != auparse.AUDIT_LOGIN {
+			// It appears AUDIT_LOGIN indicates the
+			// canonical start of a user session.
+			// At least, it is the event type
+			// associated with a user-specific
+			// sshd process.
+			return nil
+		}
+
 		srcPID, err := strconv.Atoi(event.Process.PID)
 		if err != nil {
-			return fmt.Errorf("failed to parse auditd session init event pid ('%s') - %w",
-				event.Process.PID, err)
+			return fmt.Errorf("failed to parse audit session init event pid for session id '%s' ('%s') - %w",
+				event.Session, event.Process.PID, err)
 		}
 
 		u = &user{
@@ -130,6 +144,8 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		}
 	}
 
+	// Cache the event if the audit session does not have
+	// any associated common.RemoteUserLogin object.
 	u.cached = append(u.cached, event)
 	o.sessIDsToUsers[event.Session] = u
 
