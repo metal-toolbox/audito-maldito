@@ -41,17 +41,14 @@ func TestSessionTracker_RemoteLogin_ValidateErr(t *testing.T) {
 		t:      t,
 	}))
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- st.remoteLogin(common.RemoteUserLogin{
-			Source:     nil,
-			PID:        999,
-			CredUserID: "foo",
-		})
-	}()
+	err := st.remoteLogin(common.RemoteUserLogin{
+		Source:     nil,
+		PID:        999,
+		CredUserID: "foo",
+	})
 
 	var exp *common.RemoteUserLoginValidateError
-	assert.ErrorAs(t, <-errs, &exp)
+	assert.ErrorAs(t, err, &exp)
 }
 
 func TestSessionTracker_RemoteLogin_HasAuditSession(t *testing.T) {
@@ -83,24 +80,19 @@ func TestSessionTracker_RemoteLogin_HasAuditSession(t *testing.T) {
 
 	st.sessIDsToUsers["123"] = u
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- st.remoteLogin(common.RemoteUserLogin{
-			Source: &auditevent.AuditEvent{
-				Subjects: map[string]string{
-					"some key": "some value",
-				},
-				Source: auditevent.EventSource{
-					Type:  "sshd",
-					Value: "127.0.0.1",
-				},
+	err := st.remoteLogin(common.RemoteUserLogin{
+		Source: &auditevent.AuditEvent{
+			Subjects: map[string]string{
+				"some key": "some value",
 			},
-			PID:        999,
-			CredUserID: "foo",
-		})
-	}()
-
-	err := <-errs
+			Source: auditevent.EventSource{
+				Type:  "sshd",
+				Value: "127.0.0.1",
+			},
+		},
+		PID:        999,
+		CredUserID: "foo",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,24 +128,20 @@ func TestSessionTracker_RemoteLogin_HasAuditSessionCache_WriteErr(t *testing.T) 
 
 	cancelFn()
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- st.remoteLogin(common.RemoteUserLogin{
-			Source: &auditevent.AuditEvent{
-				Subjects: map[string]string{
-					"some key": "some value",
-				},
-				Source: auditevent.EventSource{
-					Type:  "sshd",
-					Value: "127.0.0.1",
-				},
+	err := st.remoteLogin(common.RemoteUserLogin{
+		Source: &auditevent.AuditEvent{
+			Subjects: map[string]string{
+				"some key": "some value",
 			},
-			PID:        999,
-			CredUserID: "foo",
-		})
-	}()
+			Source: auditevent.EventSource{
+				Type:  "sshd",
+				Value: "127.0.0.1",
+			},
+		},
+		PID:        999,
+		CredUserID: "foo",
+	})
 
-	err := <-errs
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -183,12 +171,7 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 		CredUserID: "foo",
 	}
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- st.remoteLogin(expRUL)
-	}()
-
-	err := <-errs
+	err := st.remoteLogin(expRUL)
 	if err != nil {
 		t.Fatal(err)
 	}
