@@ -538,7 +538,7 @@ func TestSessionTracker_AuditdEvent_CreateSession_NoRUL(t *testing.T) {
 	assert.Len(t, st.sessIDsToUsers["123"].cached, numEvents)
 }
 
-func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
+func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
@@ -575,7 +575,7 @@ func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
 	assert.Len(t, st.pidsToRULs, 0)
 }
 
-func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
+func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
