@@ -195,7 +195,8 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 //	                 have been written to the lines channel
 func newTestLogReader(
 	ctx context.Context,
-	lineSetsToSend []string) (lines <-chan string, allowWrites func(), writesDone <-chan error) {
+	lineSetsToSend []string,
+) (lines <-chan string, allowWrites func(), writesDone <-chan error) {
 	linesRet := make(chan string)
 	allowWrite := make(chan struct{})
 	writesDoneRet := make(chan error, 1)
