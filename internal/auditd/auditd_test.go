@@ -13,7 +13,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
-func TestAuditd_Read_RemoveLoginError(t *testing.T) {
+func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
