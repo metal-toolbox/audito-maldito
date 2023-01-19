@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
-	lr := newTestLogReader(ctx, []string{
+	lines, allowWritesFn, writesDone := newTestLogReader(ctx, []string{
 		goodAuditd00,
 		goodAuditd01,
 		goodAuditd02,
@@ -73,7 +74,7 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		Audits: lr.lines,
+		Audits: lines,
 		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
@@ -95,12 +96,12 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 		t.Fatalf("read exited unexpectedly while writing remote user login to logins chan - %v", err)
 	}
 
-	lr.allowWritesToStart()
+	allowWritesFn()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-lr.writesDone:
+	case err := <-writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -122,7 +123,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
-	lr := newTestLogReader(ctx, []string{
+	lines, allowWritesFn, writesDone := newTestLogReader(ctx, []string{
 		goodAuditd00,
 		goodAuditd01,
 		goodAuditd02,
@@ -135,7 +136,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
 	a := Auditd{
-		Audits: lr.lines,
+		Audits: lines,
 		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
@@ -149,12 +150,12 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 		exited <- a.Read(ctx)
 	}()
 
-	lr.allowWritesToStart()
+	allowWritesFn()
 
 	select {
 	case err := <-exited:
 		t.Fatalf("read exited unexpectedly - %v", err)
-	case err := <-lr.writesDone:
+	case err := <-writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
 		}
@@ -178,13 +179,27 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	checker.check()
 }
 
-func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogReader {
-	lines := make(chan string)
+// newTestLogReader creates all the things needed to simulate one or more
+// audit log files without the need for a file.
+//
+// Return values:
+//
+//	r0: lines - a channel that receives the audit lines
+//
+//	r1: allowWrites - a function that, when executed, will start
+//	                  reading lines from the slice
+//
+//	r2: writesDone - a channel that is either written to when
+//	                 if an error occurs (such as ctx being
+//	                 cancelled) or is closed when all lines
+//	                 have been written to the lines channel
+func newTestLogReader(ctx context.Context, lineSetsToSend []string) (lines <-chan string, allowWrites func(), writesDone <-chan error) {
+	linesRet := make(chan string)
 	allowWrite := make(chan struct{})
-	writesDone := make(chan error, 1)
+	writesDoneRet := make(chan error, 1)
 
 	go func() {
-		defer close(writesDone)
+		defer close(writesDoneRet)
 
 		<-allowWrite
 
@@ -194,34 +209,26 @@ func newTestLogReader(ctx context.Context, lineSetsToSend []string) *testLogRead
 			for scanner.Scan() {
 				select {
 				case <-ctx.Done():
-					writesDone <- ctx.Err()
+					writesDoneRet <- ctx.Err()
 					return
-				case lines <- scanner.Text():
+				case linesRet <- scanner.Text():
 					// continue.
 				}
 			}
 
 			if scanner.Err() != nil {
-				writesDone <- fmt.Errorf("testLogReader bufio.Scanner failed - %w", scanner.Err())
+				writesDoneRet <- fmt.Errorf("testLogReader bufio.Scanner failed - %w", scanner.Err())
 			}
 		}
 	}()
 
-	return &testLogReader{
-		lines:      lines,
-		allowWrite: allowWrite,
-		writesDone: writesDone,
-	}
-}
+	once := &sync.Once{}
 
-type testLogReader struct {
-	lines      chan string
-	allowWrite chan struct{}
-	writesDone chan error
-}
-
-func (o *testLogReader) allowWritesToStart() {
-	close(o.allowWrite)
+	return linesRet, func() {
+		once.Do(func() {
+			close(allowWrite)
+		})
+	}, writesDoneRet
 }
 
 type testAuditEncoder struct {
