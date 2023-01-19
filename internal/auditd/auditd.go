@@ -64,7 +64,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 	defer reassembler.Close()
 
-	go maintainReassemblerLoop(ctx, reassembler)
+	go maintainReassemblerLoop(ctx, reassembler, reassemblerInterval)
 
 	parseAuditLogsDone := make(chan error, 1)
 	go func() {
@@ -106,11 +106,12 @@ func (o *Auditd) Read(ctx context.Context) error {
 	}
 }
 
-// maintainReassemblerLoop calls libaudit.Reassembler.Maintain in a loop.
-func maintainReassemblerLoop(ctx context.Context, reassembler *libaudit.Reassembler) {
+// maintainReassemblerLoop calls libaudit.Reassembler.Maintain in a loop
+// at an interval specified by d.
+func maintainReassemblerLoop(ctx context.Context, reassembler *libaudit.Reassembler, d time.Duration) {
 	// This code comes from the go-libaudit example in:
 	// cmd/auparse/auparse.go
-	t := time.NewTicker(reassemblerInterval)
+	t := time.NewTicker(d)
 	defer t.Stop()
 
 	for {
