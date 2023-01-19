@@ -201,7 +201,12 @@ func newTestLogReader(ctx context.Context, lineSetsToSend []string) (lines <-cha
 	go func() {
 		defer close(writesDoneRet)
 
-		<-allowWrite
+		select {
+		case <-ctx.Done():
+			writesDoneRet <- ctx.Err()
+			return
+		case <-allowWrite:
+		}
 
 		for _, lineSet := range lineSetsToSend {
 			scanner := bufio.NewScanner(strings.NewReader(lineSet))
