@@ -53,7 +53,11 @@ type sessionTracker struct {
 func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	err := rul.Validate()
 	if err != nil {
-		return fmt.Errorf("failed to validate remote user login - %w", err)
+		return &sessionTrackerError{
+			remoteLoginFail: true,
+			message:         fmt.Sprintf("failed to validate remote user login - %s", err),
+			inner:           err,
+		}
 	}
 
 	// Check if there is an auditd session for this login.
@@ -103,11 +107,24 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 			err := u.writeAndClearCache(o.eventWriter)
 			if err != nil {
-				return fmt.Errorf("failed to write cached events for user '%s' - %w",
-					u.login.CredUserID, err)
+				return &sessionTrackerError{
+					auditEventFail: true,
+					message: fmt.Sprintf("failed to write cached events for user '%s' - %s",
+						u.login.CredUserID, err),
+					inner: err,
+				}
 			}
 
-			return o.eventWriter.Write(u.toAuditEvent(event))
+			err = o.eventWriter.Write(u.toAuditEvent(event))
+			if err != nil {
+				return &sessionTrackerError{
+					auditEventFail: true,
+					message:        err.Error(),
+					inner:          err,
+				}
+			}
+
+			return nil
 		}
 	} else {
 		// Create a new audit session.
@@ -123,8 +140,12 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 		srcPID, err := strconv.Atoi(event.Process.PID)
 		if err != nil {
-			return fmt.Errorf("failed to parse audit session init event pid for session id '%s' ('%s') - %w",
-				event.Session, event.Process.PID, err)
+			return &sessionTrackerError{
+				auditEventFail: true,
+				message: fmt.Sprintf("failed to parse audit session init event pid for session id '%s' ('%s') - %s",
+					event.Session, event.Process.PID, err),
+				inner: err,
+			}
 		}
 
 		u = &user{
@@ -140,7 +161,16 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 			o.sessIDsToUsers[event.Session] = u
 
-			return o.eventWriter.Write(u.toAuditEvent(event))
+			err = o.eventWriter.Write(u.toAuditEvent(event))
+			if err != nil {
+				return &sessionTrackerError{
+					auditEventFail: true,
+					message:        err.Error(),
+					inner:          err,
+				}
+			}
+
+			return nil
 		}
 	}
 

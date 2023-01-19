@@ -148,8 +148,11 @@ func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Re
 
 			auditMsg, err := auparse.ParseLogLine(line)
 			if err != nil {
-				return fmt.Errorf("failed to parse auditd log line '%s' - %w",
-					line, err)
+				return &parseAuditLogsError{
+					message: fmt.Sprintf("failed to parse auditd log line '%s' - %s",
+						line, err),
+					inner: err,
+				}
 			}
 
 			reass.PushMessage(auditMsg)
@@ -172,7 +175,10 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 		select {
 		case <-s.ctx.Done():
 		case s.results <- reassembleAuditdEventResult{
-			err: fmt.Errorf("failed to coalesce auditd messages - %w", err),
+			err: &reassemblerCBError{
+				message: fmt.Sprintf("failed to coalesce audit messages - %s", err),
+				inner:   err,
+			},
 		}:
 		}
 
