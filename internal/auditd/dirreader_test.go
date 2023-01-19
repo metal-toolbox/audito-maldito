@@ -722,8 +722,10 @@ func (o *testFile) Seek(offset int64, whence int) (int64, error) {
 		return 0, errors.New("offset is negative")
 	}
 
-	if nextOffset > len(o.data)-1 {
-		return 0, errors.New("offset is greater than the file's size")
+	// You would think we should check len(o.data)-1,
+	// but that is handled by the Read method.
+	if nextOffset > len(o.data) {
+		return 0, fmt.Errorf("offset is greater than the file's size of %d", len(o.data))
 	}
 
 	o.offset = nextOffset
