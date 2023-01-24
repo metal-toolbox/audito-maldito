@@ -31,7 +31,7 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 	var err error
 	dirPath, err = filepath.Abs(dirPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get abolute path for '%s' - %w", dirPath, err)
+		return nil, fmt.Errorf("failed to get absolute path for '%s' - %w", dirPath, err)
 	}
 
 	dirEntries, err := os.ReadDir(dirPath)
