@@ -2,7 +2,6 @@ package util
 
 import (
 	"errors"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -117,7 +116,6 @@ VERSION="1.0"
 			t.Parallel()
 
 			path := filepath.Join(tmpdir, tt.name)
-			log.Printf("path: '%s'", path)
 
 			if tt.args.osReleaseContents != "" {
 				assert.NoError(t, os.WriteFile(path, []byte(tt.args.osReleaseContents), 0o600))
