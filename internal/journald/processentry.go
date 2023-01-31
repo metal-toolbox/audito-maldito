@@ -28,7 +28,7 @@ const (
 
 var (
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
-	loginRE  = regexp.MustCompile(`Accepted publickey for (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
+	loginRE  = regexp.MustCompile(`Accepted publickey for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
 	certIDRE = regexp.MustCompile(`ID (?P<UserID>\S+)\s+\(serial (?P<Serial>\d+)\)\s+(?P<CA>.+)`)
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
 	notInAllowUsersRE = regexp.MustCompile(`User (?P<Username>\w+) from (?P<Source>\S+) not allowed because not listed in AllowUsers`)
@@ -114,7 +114,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 
 	pid, err := strconv.Atoi(config.pid)
 	if err != nil {
-		logger.Errorf("failed to convert pid string to int ('%s') - %w",
+		logger.Errorf("failed to convert pid string to int ('%s') - %s",
 			config.pid, err)
 		return nil
 	}

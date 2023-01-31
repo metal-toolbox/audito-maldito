@@ -21,6 +21,67 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestLoginRE_Usernames(t *testing.T) {
+	t.Parallel()
+
+	// From "adduser" on Ubuntu:
+	// # adduser 'wow/that/is/terrible'
+	// adduser: To avoid problems, the username should consist only
+	// of letters, digits, underscores, periods, at signs and dashes,
+	// and not start with a dash (as defined by IEEE Std 1003.1-2001).
+	// For compatibility with Samba machine accounts $ is also supported
+	// at the end of the username
+	for _, tt := range []struct {
+		name string
+		sep  string
+	}{
+		{
+			name: "WithDashes",
+			sep:  "-",
+		},
+		{
+			name: "WithDollars",
+			sep:  "$",
+		},
+		{
+			name: "WithPeriods",
+			sep:  ".",
+		},
+		{
+			name: "WithAtSign",
+			sep:  "@",
+		},
+		{
+			name: "WithDigit",
+			sep:  "1",
+		},
+	} {
+		tt := tt // The linter made me do this. I am sorry.
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			username := "audito" + tt.sep + "maldito" + tt.sep + "testing"
+
+			x := "Accepted publickey for " + username + " from 127.0.0.1 port 59288 " +
+				"ssh2: ED25519-CERT SHA256:/5MdxU2dhlUFDW/vEs1uLiA1eLjqjJ0lw7oSiQ1op6A " +
+				"ID foo@bar.com (serial 0) CA ED25519 SHA256:OR+UgqGe+Lk3k10mxPdKibVBYpYtGSROfNEBOc4G2M4"
+
+			matches := loginRE.FindStringSubmatch(x)
+			if len(matches) == 0 {
+				t.Fatal("failed to find string submatch")
+			}
+
+			usrIdx := loginRE.SubexpIndex(idxLoginUserName)
+			if usrIdx == -1 {
+				t.Fatal("failed to find login username index")
+			}
+
+			assert.Equal(t, username, matches[usrIdx])
+		})
+	}
+}
+
 type testAuditEventEncoder struct {
 	evt *auditevent.AuditEvent
 	t   *testing.T
