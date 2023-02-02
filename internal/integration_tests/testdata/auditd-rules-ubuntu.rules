@@ -1,0 +1,24 @@
+## linuxaudit rules
+## For more information, see:
+##    https://linux.die.net/man/8/auditd
+##    https://linux.die.net/man/7/audit.rules
+
+## First rule - delete all
+-D
+
+## Increase the buffers to survive stress events.
+## Make this bigger for busy systems
+-b 8192
+
+## This determines how long to wait in burst of events
+--backlog_wait_time 60000
+
+## Set failure mode to syslog
+-f 1
+
+## Make the loginuid immutable. This prevents tampering with the auid.
+--loginuid-immutable
+
+## Track executions of processes.
+-a exit,always -F arch=b64 -S execve -F key=operator-commands -F auid>=1000
+-a exit,always -F arch=b32 -S execve -F key=operator-commands -F auid>=1000

@@ -29,7 +29,7 @@ coverage:
 	# The "-coverpkg ./..." tells go to calculate coverage for
 	# packages that are indirectly tested by other packages.
 	# This is required for integration test code coverage.
-	@go test -timeout 30s -coverpkg ./... -tags int ./... -coverprofile=coverage.out -covermode=atomic
+	@go test -timeout 10m -coverpkg ./... -tags int ./... -coverprofile=coverage.out -covermode=atomic
 	@go tool cover -func=coverage.out
 	@go tool cover -html=coverage.out
 
