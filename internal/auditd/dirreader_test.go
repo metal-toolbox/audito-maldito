@@ -19,6 +19,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestStartLogDirReader(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	tempDirPath := t.TempDir()
+
+	_, err := StartLogDirReader(ctx, tempDirPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStartLogDirReader_EmptyDirPathErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	_, err := StartLogDirReader(ctx, "")
+	assert.NotNil(t, err)
+}
+
+func TestStartLogDirReader_ReadDirErr(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	_, err := StartLogDirReader(ctx, "/Function TestRotatingFile_Lifecycle missing the call to method parallel")
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
 func TestSortLogNamesOldToNew(t *testing.T) {
 	t.Parallel()
 

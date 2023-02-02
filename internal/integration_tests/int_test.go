@@ -23,11 +23,9 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
-	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/app"
-	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 )
 
 const (
@@ -53,40 +51,6 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
-}
-
-func TestStartLogDirReader(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-
-	tempDirPath := t.TempDir()
-
-	_, err := auditd.StartLogDirReader(ctx, tempDirPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestStartLogDirReader_EmptyDirPathErr(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-
-	_, err := auditd.StartLogDirReader(ctx, "")
-	assert.NotNil(t, err)
-}
-
-func TestStartLogDirReader_ReadDirErr(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-
-	_, err := auditd.StartLogDirReader(ctx, "/Function TestRotatingFile_Lifecycle missing the call to method parallel")
-	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 //nolint:paralleltest // should not run in parallel
