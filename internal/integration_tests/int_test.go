@@ -58,9 +58,6 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 	ctx, cancelFn := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelFn()
 
-	ctx, cancelFn = context.WithTimeout(ctx, 5*time.Minute)
-	defer cancelFn()
-
 	ourPrivateKeyPath := setupUbuntuComputer(t, ctx)
 
 	t.Setenv("NODE_NAME", "integration-test")
