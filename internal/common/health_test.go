@@ -3,10 +3,11 @@ package common
 import (
 	"context"
 	"crypto/rand"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewHealth_DefaultReadiness(t *testing.T) {
@@ -97,10 +98,11 @@ func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
 	}
 
 	err := h.WaitForReadyCtxOrTimeout(context.Background(), time.Nanosecond)
-	assert.ErrorIs(t, err, timedOutErr)
+	assert.ErrorIs(t, err, errTimedOut)
 }
 
 // intn returns a random number between min and max.
+// nolint: //because min is always zero when this was added.
 func intn(t *testing.T, min, max int64) int64 {
 	t.Helper()
 

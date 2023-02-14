@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var timedOutErr = errors.New("timed-out")
+var errTimedOut = errors.New("timed-out")
 
 // NewSingleReadinessHealth returns a *Health with its readiness counter
 // set to one.
@@ -57,7 +57,7 @@ func (o *Health) WaitForReadyCtxOrTimeout(ctx context.Context, timeout time.Dura
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(timeout):
-		return fmt.Errorf("timeout of %s exceeded - %w", timeout.String(), timedOutErr)
+		return fmt.Errorf("timeout of %s exceeded - %w", timeout.String(), errTimedOut)
 	case <-o.WaitForReady():
 		return nil
 	}
