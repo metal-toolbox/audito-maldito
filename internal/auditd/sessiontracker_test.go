@@ -221,8 +221,16 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
+	// "Extra events": Meaning events created outside the loop below.
+	// These events (such as login / logout) are needed for a session
+	// to be created.
+	//
+	// Note: The number of "extra" events must be less than the
+	// minimum number of generated events to prevent arithmetic
+	// errors in the for loop condition (e.g., 1-2 would result
+	// in the loop not executing any code).
 	numExtraEvents := 2
-	numEventsToWrite := int(intn(t, 1, 100))
+	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
 
 	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
@@ -315,8 +323,16 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
+	// "Extra events": Meaning events created outside the loop below.
+	// These events (such as login / logout) are needed for a session
+	// to be created.
+	//
+	// Note: The number of "extra" events must be less than the
+	// minimum number of generated events to prevent arithmetic
+	// errors in the for loop condition (e.g., 1-2 would result
+	// in the loop not executing any code).
 	numExtraEvents := 1
-	numEventsToWrite := int(intn(t, 1, 100))
+	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
 
 	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
