@@ -8,6 +8,7 @@ import (
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
+	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
@@ -93,6 +94,10 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 	}
 
 	u, hasSession := o.sessIDsToUsers[event.Session]
+	if logger.Level() == zap.DebugLevel {
+		logger.Debugf("user: %s | session: %s | has-session: %t | event-type: %s | summary: %v",
+			event.User.Names, event.Session, hasSession, event.Type, event.Summary)
+	}
 	if hasSession {
 		// Either write the audit event to the event writer
 		// or cache it for later.
