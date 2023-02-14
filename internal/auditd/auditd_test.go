@@ -30,6 +30,7 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 			events: events,
 			t:      t,
 		}),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	errs := make(chan error, 1)
@@ -73,6 +74,7 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 			events: events,
 			t:      t,
 		}),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	errs := make(chan error, 1)
@@ -117,6 +119,7 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 			events: events,
 			t:      t,
 		}),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	cancelEventWFn()

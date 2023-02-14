@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/app"
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 const (
@@ -38,6 +39,17 @@ const (
 var (
 	//go:embed testdata/auditd-rules-ubuntu.rules
 	auditdRulesUbuntu string
+
+	debug *log.Logger
+
+	zapLoggerFn = func() (*zap.Logger, error) {
+		config := zap.NewDevelopmentConfig()
+		config.EncoderConfig = zap.NewDevelopmentEncoderConfig()
+		config.DisableStacktrace = true
+		config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+
+		return config.Build()
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -129,11 +141,11 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 		}
 	})
 
+	appHealth := common.NewHealth()
+
 	appErrs := make(chan error, 1)
 	go func() {
-		appErrs <- app.Run(ctx, []string{"audito-maldito"}, func() (*zap.Logger, error) {
-			return zap.NewProduction()
-		})
+		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerFn)
 	}()
 
 	err := execSSHPipeline(ctx, ourPrivateKeyPath, expected)

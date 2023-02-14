@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/app"
+	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 func main() {
@@ -27,5 +28,5 @@ func mainWithError() error {
 		return zap.NewProduction()
 	}
 
-	return app.Run(ctx, os.Args, newLoggerFn)
+	return app.Run(ctx, os.Args, common.NewHealth(), newLoggerFn)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
 	"go.uber.org/zap"
@@ -19,7 +20,7 @@ import (
 
 var logger *zap.SugaredLogger
 
-func Run(ctx context.Context, osArgs []string, newLoggerFn func() (*zap.Logger, error)) error {
+func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn func() (*zap.Logger, error)) error {
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
@@ -71,7 +72,7 @@ func Run(ctx context.Context, osArgs []string, newLoggerFn func() (*zap.Logger, 
 
 	eg, groupCtx := errgroup.WithContext(ctx)
 
-	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(groupCtx, auditlogpath)
+	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(groupCtx, auditlogpath, zapr.NewLogger(l))
 	if auditfileerr != nil {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
@@ -82,6 +83,12 @@ func Run(ctx context.Context, osArgs []string, newLoggerFn func() (*zap.Logger, 
 			auditLogDirPath, err)
 	}
 
+	h.AddReadiness()
+	go func() {
+		<-logDirReader.InitFilesDone()
+		h.OnReady()
+	}()
+
 	eg.Go(logDirReader.Wait)
 
 	lastReadJournalTS := lastReadJournalTimeStamp()
@@ -90,6 +97,7 @@ func Run(ctx context.Context, osArgs []string, newLoggerFn func() (*zap.Logger, 
 
 	logger.Infoln("starting workers...")
 
+	h.AddReadiness()
 	eg.Go(func() error {
 		jp := journald.Processor{
 			BootID:    bootID,
@@ -99,16 +107,19 @@ func Run(ctx context.Context, osArgs []string, newLoggerFn func() (*zap.Logger, 
 			EventW:    eventWriter,
 			Logins:    logins,
 			CurrentTS: lastReadJournalTS,
+			Health:    h,
 		}
 		return jp.Read(groupCtx)
 	})
 
+	h.AddReadiness()
 	eg.Go(func() error {
 		ap := auditd.Auditd{
 			After:  time.UnixMicro(int64(lastReadJournalTS)),
 			Audits: logDirReader.Lines(),
 			Logins: logins,
 			EventW: eventWriter,
+			Health: h,
 		}
 		return ap.Read(groupCtx)
 	})

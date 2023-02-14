@@ -56,6 +56,7 @@ func StartLogDirReader(ctx context.Context, dirPath string) (*LogDirReader, erro
 		watcher:       &fsnotifyWatcher{watcher: watcher},
 		fs:            &osFileSystem{},
 		lines:         make(chan string),
+		initFilesDone: make(chan struct{}),
 		done:          make(chan struct{}),
 	}
 
@@ -111,6 +112,7 @@ type LogDirReader struct {
 	watcher       fsWatcher
 	fs            fileSystem
 	lines         chan string
+	initFilesDone chan struct{}
 	done          chan struct{}
 	err           error
 }
@@ -132,6 +134,10 @@ func (o *LogDirReader) Wait() error {
 	return o.err
 }
 
+func (o *LogDirReader) InitFilesDone() <-chan struct{} {
+	return o.initFilesDone
+}
+
 func (o *LogDirReader) loop(ctx context.Context) {
 	err := o.loopWithError(ctx)
 
@@ -149,6 +155,8 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 	if len(o.initFileNames) > 0 {
 		// Force the initFileDone code to run.
 		initFileDone <- initialFileRead{}
+	} else {
+		close(o.initFilesDone)
 	}
 
 	initFileIndex := 0
@@ -180,6 +188,7 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 			if initFileIndex > len(o.initFileNames)-1 {
 				// No initial files remaining.
 				o.initFileNames = nil
+				close(o.initFilesDone)
 				continue
 			}
 

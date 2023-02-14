@@ -47,6 +47,8 @@ type Auditd struct {
 
 	// EventW is the auditevent.EventWriter to write events to.
 	EventW *auditevent.EventWriter
+
+	Health *common.Health
 }
 
 // TODO: Write documentation about creating a splunk query that shows
@@ -75,6 +77,8 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
+
+	o.Health.OnReady()
 
 	for {
 		select {

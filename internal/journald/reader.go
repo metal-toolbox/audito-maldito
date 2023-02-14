@@ -27,6 +27,7 @@ type Processor struct {
 	EventW    *auditevent.EventWriter
 	Logins    chan<- common.RemoteUserLogin
 	CurrentTS uint64 // Microseconds since unix epoch.
+	Health    *common.Health
 	jr        JournalReader
 }
 
@@ -61,6 +62,8 @@ func (jp *Processor) Read(ctx context.Context) error {
 		// second guess that.
 		flushLastRead(jp.CurrentTS)
 	}()
+
+	jp.Health.OnReady()
 
 	for {
 		select {
