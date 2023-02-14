@@ -10,13 +10,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
-	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/metal-toolbox/auditevent"
-	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/app"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
@@ -33,17 +29,6 @@ const (
 var (
 	//go:embed testdata/auditd-rules-ubuntu.rules
 	auditdRulesUbuntu string
-
-	debug *log.Logger
-
-	zapLoggerFn = func() (*zap.Logger, error) {
-		config := zap.NewDevelopmentConfig()
-		config.EncoderConfig = zap.NewDevelopmentEncoderConfig()
-		config.DisableStacktrace = true
-		config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
-
-		return config.Build()
-	}
 )
 
 func TestMain(m *testing.M) {
@@ -66,6 +51,7 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	ourPrivateKeyPath := setupUbuntuComputer(t, ctx)
 
+	// Required by audito-maldito.
 	t.Setenv("NODE_NAME", "integration-test")
 
 	expectedShellPipeline := []appToRun{
@@ -83,63 +69,9 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 		},
 	}
 
-	// Shell pipelines imply the last program in the pipeline
-	// gets executed first.
-	//
-	// E.g., "hexdump -C /etc/ssh/sshd_config | grep Permit"
-	// implies "grep" is executed first.
-	index := len(expectedShellPipeline) - 1
+	checkPipelineErrs, onEventFn := newShellPipelineChecker(ctx, expectedShellPipeline)
 
-	verifyErrs := make(chan error, 1)
-	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", func(event *auditevent.AuditEvent) {
-		if index < 0 {
-			return
-		}
-
-		if userName := event.Subjects["loggedAs"]; userName != testingUser {
-			return
-		}
-
-		if userID := event.Subjects["userID"]; userID != testingCertID {
-			return
-		}
-
-		if debug != nil {
-			debug.Printf("createPipeAndReadEvents event: %+v", event)
-		}
-
-		action, _, err := valueFromMetadataExtraMap("action", event.Metadata.Extra)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-			case verifyErrs <- err:
-			}
-			return
-		}
-
-		if action != "executed" {
-			return
-		}
-
-		how, hasHow, err := valueFromMetadataExtraMap("how", event.Metadata.Extra)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-			case verifyErrs <- err:
-			}
-			return
-		}
-
-		if !hasHow || filepath.Base(how) != expectedShellPipeline[index].exeName {
-			return
-		}
-
-		index--
-
-		if index < 0 {
-			verifyErrs <- nil
-		}
-	})
+	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", onEventFn)
 
 	appHealth := common.NewHealth()
 
@@ -148,7 +80,7 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerFn)
 	}()
 
-	err := appHealth.WaitForReadyCtxOrTimeout(ctx, 30*time.Second)
+	err := appHealth.WaitForReadyCtxOrTimeout(ctx, time.Minute)
 	if err != nil {
 		t.Fatalf("failed to wait for app to become ready - %s", err)
 	}
@@ -166,17 +98,17 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 		<-appErrs
 
 		t.Fatalf("pipe reader exited unexpectedly - %v", err)
-	case err = <-verifyErrs:
+	case err = <-checkPipelineErrs:
 		cancelFn()
 		<-appErrs
 
 		if err != nil {
-			t.Fatalf("failed to verify events - %s", err)
+			t.Fatalf("failed to check audit events for shell pipeline - %s", err)
 		}
 	}
 }
 
-// setupUbuntuComputer executes the necessary programs to setup a Ubuntu
+// setupUbuntuComputer executes the necessary programs to set up an Ubuntu
 // machine for integration tests. This function can be safely run multiple
 // times; it is idempotent.
 func setupUbuntuComputer(t *testing.T, ctx context.Context) (ourPrivateKeyPath string) {

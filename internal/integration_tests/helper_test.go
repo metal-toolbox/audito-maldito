@@ -17,6 +17,20 @@ import (
 	"testing"
 
 	"github.com/metal-toolbox/auditevent"
+	"go.uber.org/zap"
+)
+
+var (
+	debug *log.Logger
+
+	zapLoggerFn = func() (*zap.Logger, error) {
+		config := zap.NewDevelopmentConfig()
+		config.EncoderConfig = zap.NewDevelopmentEncoderConfig()
+		config.DisableStacktrace = true
+		config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+
+		return config.Build()
+	}
 )
 
 // setupSSHCertAccess generates a SSH CA and a private key for the current
@@ -173,6 +187,95 @@ func createPipeAndReadEvents(
 	}()
 
 	return catErrs
+}
+
+// newShellPipelineChecker creates a new shellPipelineChecker that examines
+// audit events generated audito-maldito and checks that they contain the
+// provided shell pipeline.
+//
+// It returns a channel will receive any errors related to checking
+// the pipeline and a callback function for use with createPipeAndReadEvents.
+func newShellPipelineChecker(ctx context.Context, pipeline []appToRun) (<-chan error, func(*auditevent.AuditEvent)) {
+	if len(pipeline) == 0 {
+		panic("shell pipeline is empty")
+	}
+
+	errs := make(chan error, 1)
+
+	checker := &shellPipelineChecker{
+		ctx:      ctx,
+		pipeline: pipeline,
+		// Shell pipelines imply the last program in the pipeline
+		// gets executed first.
+		//
+		// E.g., "hexdump -C /etc/ssh/sshd_config | grep Permit"
+		// implies "grep" is executed first.
+		index: len(pipeline) - 1,
+		errs:  errs,
+	}
+
+	return errs, checker.onEvent
+}
+
+type shellPipelineChecker struct {
+	ctx      context.Context //nolint
+	pipeline []appToRun
+	index    int
+	errs     chan<- error
+}
+
+func (o *shellPipelineChecker) onEvent(event *auditevent.AuditEvent) {
+	if o.index < 0 {
+		// No applications remaining in pipeline.
+		return
+	}
+
+	if userName := event.Subjects["loggedAs"]; userName != testingUser {
+		return
+	}
+
+	if userID := event.Subjects["userID"]; userID != testingCertID {
+		return
+	}
+
+	if debug != nil {
+		debug.Printf("createPipeAndReadEvents event: %+v", event)
+	}
+
+	action, _, err := valueFromMetadataExtraMap("action", event.Metadata.Extra)
+	if err != nil {
+		select {
+		case <-o.ctx.Done():
+		case o.errs <- err:
+		}
+		return
+	}
+
+	if action != "executed" {
+		return
+	}
+
+	how, hasHow, err := valueFromMetadataExtraMap("how", event.Metadata.Extra)
+	if err != nil {
+		select {
+		case <-o.ctx.Done():
+		case o.errs <- err:
+		}
+		return
+	}
+
+	if !hasHow || filepath.Base(how) != o.pipeline[o.index].exeName {
+		return
+	}
+
+	o.index--
+
+	if o.index < 0 {
+		select {
+		case <-o.ctx.Done():
+		case o.errs <- nil:
+		}
+	}
 }
 
 // valueFromMetadataExtraMap attempts to extract the value for key from the
