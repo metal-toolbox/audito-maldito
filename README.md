@@ -47,13 +47,51 @@ make image
 
 Note that you'll need to have Docker installed.
 
-## Testing
+## Unit testing
 
 To run the unit tests, you need to have `go` installed and run:
 
 ```bash
 make unit-test
 ```
+
+## Integration testing
+
+**Warning**: The integration tests assume that they are being executed on
+a test machine.
+
+**Do not execute the integration tests on a machine you care about.**
+
+Integration test code can be found in: `internal/integration_tests`.
+This directory also contains vagrant machine(s) that can be instantiated
+for testing purposes. The git repository directory is shared with the VM
+and can be accessed from within the VM at `/vagrant`.
+
+For example, users can create a Ubuntu x86 64-bit machine with the following
+shell incantations:
+
+```sh
+cd internal/integration_tests/vagrant-ubuntu-x86_64
+vagrant up --provider virtualbox
+vagrant ssh
+```
+
+Once ssh'ed into the VM, users may execute the integration tests like so:
+
+```sh
+sudo su -
+cd /vagrant
+make integration-test
+```
+
+vagrant machines can be deleted by cd'ing to the relevant vagrant directory
+and executing:
+
+```sh
+vagrant destroy
+```
+
+## Other tests
 
 To test the daemon, you can run it locally, and then run the following command:
 
