@@ -102,7 +102,8 @@ func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
 }
 
 // intn returns a random number between min and max.
-// nolint: //because min is always zero when this was added.
+//
+//nolint:unparam // because min is always zero when this code was added.
 func intn(t *testing.T, min, max int64) int64 {
 	t.Helper()
 
