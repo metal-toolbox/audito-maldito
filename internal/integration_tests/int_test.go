@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	testingUser = "auditomalditotesting"
+	testingUser   = "auditomalditotesting"
+	testingCertID = "foo@bar.com"
 
 	testingSSHDConfigFilePath = "/etc/ssh/audito-maldito-integration-test_config"
 	auditdRulesFilePath       = "/etc/audit/rules.d/audit.rules"
@@ -74,41 +75,47 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	t.Setenv("NODE_NAME", "integration-test")
 
-	expected := []appToRun{
+	expectedShellPipeline := []appToRun{
 		{
-			exePath: "hexdump",
+			exeName: "hexdump",
 			args: []string{
 				"-C", "/etc/ssh/sshd_config",
 			},
 		},
 		{
-			exePath: "grep",
+			exeName: "grep",
 			args: []string{
 				"Permit",
 			},
 		},
 	}
 
-	index := 0
+	// Shell pipelines imply the last program in the pipeline
+	// gets executed first.
+	//
+	// E.g., "hexdump -C /etc/ssh/sshd_config | grep Permit"
+	// implies "grep" is executed first.
+	index := len(expectedShellPipeline) - 1
 
 	verifyErrs := make(chan error, 1)
 	readEventsErr := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", func(event *auditevent.AuditEvent) {
-		if index > len(expected)-1 {
+		if index < 0 {
 			return
 		}
 
-		// "metadata": {
-		//    "auditId": "87",
-		//    "extra": {
-		//      "action": "executed",
-		//      "how": "/usr/bin/ls",
-		//      "object": {
-		//        "primary": "/usr/bin/ls",
-		//        "type": "file"
-		//      }
-		//    }
-		//  },
-		action, hasIt, err := valueFromMetadataExtraMap("action", event.Metadata.Extra)
+		if userName := event.Subjects["loggedAs"]; userName != testingUser {
+			return
+		}
+
+		if userID := event.Subjects["userID"]; userID != testingCertID {
+			return
+		}
+
+		if debug != nil {
+			debug.Printf("createPipeAndReadEvents event: %+v", event)
+		}
+
+		action, _, err := valueFromMetadataExtraMap("action", event.Metadata.Extra)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -117,11 +124,11 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 			return
 		}
 
-		if !hasIt || action != "executed" {
+		if action != "executed" {
 			return
 		}
 
-		how, hasIt, err := valueFromMetadataExtraMap("how", event.Metadata.Extra)
+		how, hasHow, err := valueFromMetadataExtraMap("how", event.Metadata.Extra)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -130,13 +137,13 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 			return
 		}
 
-		if !hasIt || filepath.Base(how) != expected[index].exePath {
+		if !hasHow || filepath.Base(how) != expectedShellPipeline[index].exeName {
 			return
 		}
 
-		index++
+		index--
 
-		if index == len(expected) {
+		if index < 0 {
 			verifyErrs <- nil
 		}
 	})
@@ -148,7 +155,12 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerFn)
 	}()
 
-	err := execSSHPipeline(ctx, ourPrivateKeyPath, expected)
+	err := appHealth.WaitForReadyCtxOrTimeout(ctx, 30*time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for app to become ready - %s", err)
+	}
+
+	err = execSSHPipeline(ctx, ourPrivateKeyPath, expectedShellPipeline)
 	if err != nil {
 		t.Fatalf("failed to execute ssh pipeline - %s", err)
 	}
@@ -277,7 +289,7 @@ func setupSSHCertAccess(t *testing.T, ctx context.Context, homeDirPath string) (
 	mustExecApp(t, exec.CommandContext(ctx,
 		"ssh-keygen",
 		"-s", caPrivateKeyFilePath,
-		"-I", "foo@bar.com",
+		"-I", testingCertID,
 		"-n", testingUser,
 		ourPrivateKeyFilePath+".pub"))
 
@@ -404,9 +416,14 @@ func valueFromMetadataExtraMap(key string, metadataExtra map[string]any) (string
 	return vStr, true, nil
 }
 
+// appToRun configures an application prior to execution.
 type appToRun struct {
-	exePath string
-	args    []string
+	// exeName is the name of an executable
+	// to execute (e.g., "hexdump").
+	exeName string
+
+	// args are optional arguments to pass to the process.
+	args []string
 }
 
 // execSSHPipeline connects to the SSH server running on loopback TCP port 22
@@ -415,15 +432,10 @@ type appToRun struct {
 //
 // This simulates a user logging in via SSH and executing programs.
 func execSSHPipeline(ctx context.Context, ourPrivateKeyPath string, pipeline []appToRun) error {
-	// Wait for audito-maldito to start.
-	// TODO: Perhaps we can pass something into the context and use that
-	// to unblock this code?
-	time.Sleep(5 * time.Second)
-
 	pipelineBuf := bytes.NewBuffer(nil)
 
 	for i, cmd := range pipeline {
-		pipelineBuf.WriteString(cmd.exePath)
+		pipelineBuf.WriteString(cmd.exeName)
 
 		if len(cmd.args) > 0 {
 			for _, arg := range cmd.args {
