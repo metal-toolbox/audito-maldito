@@ -271,6 +271,7 @@ func newTestLogDirReader(ctx context.Context, fsw fsWatcher, fsi fileSystem, ini
 		watcher:       fsw,
 		fs:            fsi,
 		lines:         make(chan string),
+		initFilesDone: make(chan struct{}),
 		done:          make(chan struct{}),
 	}
 
