@@ -98,7 +98,7 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 	index := len(expectedShellPipeline) - 1
 
 	verifyErrs := make(chan error, 1)
-	readEventsErr := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", func(event *auditevent.AuditEvent) {
+	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", func(event *auditevent.AuditEvent) {
 		if index < 0 {
 			return
 		}
@@ -167,22 +167,18 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	select {
 	case err = <-appErrs:
-		if err != nil {
-			t.Fatalf("app exited with error - %s", err)
-		}
+		t.Fatalf("app exited unexpectedly - %v", err)
+	case err = <-readEventsErrs:
+		cancelFn()
+		<-appErrs
+
+		t.Fatalf("pipe reader exited unexpectedly - %v", err)
 	case err = <-verifyErrs:
 		cancelFn()
 		<-appErrs
 
 		if err != nil {
-			t.Fatalf("failed to verify event - %s", err)
-		}
-	case err = <-readEventsErr:
-		cancelFn()
-		<-appErrs
-
-		if err != nil {
-			t.Fatalf("failed to read event from pipe - %s", err)
+			t.Fatalf("failed to verify events - %s", err)
 		}
 	}
 }
