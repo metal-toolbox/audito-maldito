@@ -164,7 +164,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	if idMatches == nil {
-		logger.Infoln("b :got login entry with no matches for certificate identifiers")
+		logger.Infoln("b: got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
