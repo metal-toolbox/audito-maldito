@@ -55,6 +55,10 @@ func TestLoginRE_Usernames(t *testing.T) {
 			name: "WithDigit",
 			sep:  "1",
 		},
+		{
+			name: "WithUnicode",
+			sep:  "🏝️㱋",
+		},
 	} {
 		tt := tt // The linter made me do this. I am sorry.
 
