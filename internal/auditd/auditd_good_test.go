@@ -241,13 +241,30 @@ func newTestLogReader(
 	}, writesDoneRet
 }
 
+// testAuditEncoder implements auditevent.EventEncoder for testing purposes.
 type testAuditEncoder struct {
-	ctx    context.Context //nolint
+	// ctx is a context.Context that is checked before writing to
+	// the events channel.
+	//
+	//nolint
+	ctx context.Context
+
+	// events is written to when Encode is called.
 	events chan<- *auditevent.AuditEvent
-	t      *testing.T
+
+	// t is the current test's testing.T.
+	t *testing.T
+
+	// err is an optional error that is returned when Encode is
+	// called (only if err is non-nil).
+	err error
 }
 
 func (o testAuditEncoder) Encode(i interface{}) error {
+	if o.err != nil {
+		return o.err
+	}
+
 	event, ok := i.(*auditevent.AuditEvent)
 	if !ok {
 		o.t.Fatalf("failed to type assert event ('%T') as *auditevent.AuditEvent", i)
