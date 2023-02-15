@@ -231,8 +231,12 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	//
 	// Note: The number of "extra" events must be less than the
 	// minimum number of generated events to prevent arithmetic
-	// errors in the for loop condition (e.g., 1-2 would result
-	// in the loop not executing any code).
+	// errors in the for loop condition (e.g., if extra events
+	// is 1 and the number of generated events is 2:
+	//
+	//	1-2 = -1
+	//
+	// As a result, the code contained in the loop will not execute.
 	numExtraEvents := 2
 	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
@@ -333,8 +337,12 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 	//
 	// Note: The number of "extra" events must be less than the
 	// minimum number of generated events to prevent arithmetic
-	// errors in the for loop condition (e.g., 1-2 would result
-	// in the loop not executing any code).
+	// errors in the for loop condition (e.g., if extra events
+	// is 1 and the number of generated events is 2:
+	//
+	//	1-2 = -1
+	//
+	// As a result, the code contained in the loop will not execute.
 	numExtraEvents := 1
 	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
