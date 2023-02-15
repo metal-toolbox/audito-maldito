@@ -2,6 +2,7 @@ package auditd
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -120,15 +121,18 @@ func TestSessionTracker_RemoteLogin_HasAuditSessionCache_WriteErr(t *testing.T) 
 		cached: []*aucoalesce.Event{newAucoalesceEvent(t, "123", "failure", time.Now())},
 	}
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
+	expErr := errors.New("write error")
+
+	eventEncoder := &testAuditEncoder{
 		ctx:    ctx,
 		events: make(chan *auditevent.AuditEvent),
 		t:      t,
-	}))
+		err:    expErr,
+	}
+
+	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
 
 	st.sessIDsToUsers["123"] = u
-
-	cancelFn()
 
 	err := st.remoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -144,7 +148,7 @@ func TestSessionTracker_RemoteLogin_HasAuditSessionCache_WriteErr(t *testing.T) 
 		CredUserID: "foo",
 	})
 
-	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, expErr)
 }
 
 func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
@@ -335,11 +339,13 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
+	eventEncoder := &testAuditEncoder{
 		ctx:    ctx,
 		events: events,
 		t:      t,
-	}))
+	}
+
+	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
@@ -378,11 +384,13 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 		u.cached = append(u.cached, newAucoalesceEvent(t, "123", "success", time.Now()))
 	}
 
-	cancelFn()
+	expErr := errors.New("write error")
+
+	eventEncoder.err = expErr
 
 	err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 
-	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, expErr)
 }
 
 func TestSessionTracker_AuditdEvent_ExistingSession_WriteErr(t *testing.T) {
@@ -393,11 +401,13 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteErr(t *testing.T) {
 
 	events := make(chan *auditevent.AuditEvent, 1)
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
+	eventEncoder := &testAuditEncoder{
 		ctx:    ctx,
 		events: events,
 		t:      t,
-	}))
+	}
+
+	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
@@ -425,11 +435,12 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cancelFn()
+	expErr := errors.New("write error")
+	eventEncoder.err = expErr
 
 	err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 
-	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, expErr)
 }
 
 func TestSessionTracker_AuditdEvent_CreateSession_Skip(t *testing.T) {
@@ -795,15 +806,16 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 
 	numEvents := len(u.cached)
 
-	cancelFn()
+	expErr := errors.New("write error")
 
 	err := u.writeAndClearCache(auditevent.NewAuditEventWriter(&testAuditEncoder{
 		ctx:    ctx,
 		events: make(chan *auditevent.AuditEvent),
 		t:      t,
+		err:    expErr,
 	}))
 
-	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, expErr)
 
 	assert.Len(t, u.cached, numEvents)
 }
