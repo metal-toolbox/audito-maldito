@@ -31,6 +31,12 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn fun
 	flagSet.StringVar(&bootID, "boot-id", "", "Boot-ID to read from the journal")
 	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
+	flagSet.Usage = func() {
+		fmt.Println("audito-maldito")
+		fmt.Println("A daemon that reads a system's logs and generates audit events from them. It only supports systemd's journal and it outputs logins in JSON format")
+		fmt.Println("Refer README for more details on how to run it")
+		flagSet.PrintDefaults()
+	}
 
 	err := flagSet.Parse(osArgs[1:])
 	if err != nil {
