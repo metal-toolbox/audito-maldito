@@ -1,4 +1,4 @@
-GOLANGCI_LINT_VERSION = v1.50.1
+GOLANGCI_LINT_VERSION = v1.51.2
 
 TOOLS_DIR = .tools
 
@@ -34,9 +34,9 @@ coverage:
 	@go tool cover -html=coverage.out
 
 .PHONY: lint
-lint:
-	@echo "Running linter"
-	@golangci-lint run
+lint: $(TOOLS_DIR)/golangci-lint
+	@echo Linting Go files...
+	@$(TOOLS_DIR)/golangci-lint run
 
 .PHONY: image
 image:
