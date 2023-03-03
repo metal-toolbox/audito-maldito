@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
