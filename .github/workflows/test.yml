@@ -13,14 +13,15 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora-minimal:37
     steps:
+      - name: Install dependencies
+        run: |
+          microdnf install -y golang systemd-devel tar git
+
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-
+      
       - name: Run golangci-lint
         run: make lint
 
