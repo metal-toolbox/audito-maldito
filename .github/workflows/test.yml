@@ -49,19 +49,48 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: ghcr.io/metal-toolbox/audito-maldito:latest
 
-      - name: Scan image
-        id: scan
-        uses: anchore/scan-action@v3
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
         with:
-          image: ghcr.io/metal-toolbox/audito-maldito:latest
-          acs-report-enable: true
+          image-ref: ghcr.io/metal-toolbox/audito-maldito:latest
+          security-checks: 'vuln,config,secret'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'
+          format: 'sarif'
+          output: 'trivy-img-results.sarif'
 
-      - name: upload Anchore scan SARIF report
+      - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: ${{ steps.scan.outputs.sarif }}
-      
+          sarif_file: 'trivy-img-results.sarif'
+
       - name: Inspect action SARIF report
-        run: cat ${{ steps.scan.outputs.sarif }}
+        run: cat 'trivy-img-results.sarif'
+
+  repo-scan:
+    name: repo-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v3
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          security-checks: 'vuln,config,secret'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'
+          format: 'sarif'
+          output: 'trivy-repo-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-repo-results.sarif'
+
+      - name: Inspect action SARIF report
+        run: cat 'trivy-repo-results.sarif'
