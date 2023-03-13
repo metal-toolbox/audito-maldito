@@ -1,7 +1,10 @@
 package auditd
 
 import (
+	"bufio"
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -400,5 +403,91 @@ func TestReassemblerCB_ReassemblyComplete_CancelOnSend(t *testing.T) {
 		t.Fatal("results chan should be empty because event occurred after filter (it is non-empty)")
 	default:
 		// Good.
+	}
+}
+
+// Refer to the following GitHub issue for details:
+// https://github.com/elastic/go-libaudit/issues/127
+//
+//nolint:paralleltest,tparallel // All tests being parallel results in early exit.
+func TestReassemblerCB_CompoundEventsMissingSyscall(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFn()
+
+	//nolint // this is
+	const case0 = `type=AVC msg=audit(1668179838.476:649407): avc:  denied  { search } for  pid=4059486 comm="cephcsi" name="crypto" dev="proc" ino=475090959 scontext=system_u:system_r:svirt_lxc_net_t:s0:c222,c955 tcontext=system_u:object_r:sysctl_crypto_t:s0 tclass=dir permissive=1
+type=AVC msg=audit(1668179838.476:649407): avc:  denied  { read } for  pid=4059486 comm="cephcsi" name="fips_enabled" dev="proc" ino=475090960 scontext=system_u:system_r:svirt_lxc_net_t:s0:c222,c955 tcontext=system_u:object_r:sysctl_crypto_t:s0 tclass=file permissive=1
+type=AVC msg=audit(1668179838.476:649407): avc:  denied  { open } for  pid=4059486 comm="cephcsi" path="/proc/sys/crypto/fips_enabled" dev="proc" ino=475090960 scontext=system_u:system_r:svirt_lxc_net_t:s0:c222,c955 tcontext=system_u:object_r:sysctl_crypto_t:s0 tclass=file permissive=1
+`
+	//nolint // the way
+	const case1 = `type=EXECVE msg=audit(1671230062.742:657491): argc=2 a0="uname" a1="-p"
+type=CWD msg=audit(1671230062.742:657491): cwd="/root"
+type=PATH msg=audit(1671230062.742:657491): item=0 name="/usr/bin/uname" inode=76040 dev=fe:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:unlabeled_t:s0 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PATH msg=audit(1671230062.742:657491): item=1 name="/lib64/ld-linux-x86-64.so.2" inode=98548 dev=fe:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:unlabeled_t:s0 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PROCTITLE msg=audit(1671230062.742:657491): proctitle=756E616D65002D70
+`
+
+	//nolint // I want it to be
+	const case2 = `type=EXECVE msg=audit(1671230063.745:657579): argc=3 a0="/usr/sbin/ethtool" a1="-T" a2="lxc61be96845005"
+type=CWD msg=audit(1671230063.745:657579): cwd="/root"
+type=PATH msg=audit(1671230063.745:657579): item=0 name="/usr/sbin/ethtool" inode=162594 dev=fe:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:unlabeled_t:s0 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PATH msg=audit(1671230063.745:657579): item=1 name="/lib64/ld-linux-x86-64.so.2" inode=98548 dev=fe:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:unlabeled_t:s0 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PROCTITLE msg=audit(1671230063.745:657579): proctitle=2F7573722F7362696E2F657468746F6F6C002D54006C7863363162653936383435303035
+`
+
+	cases := []string{case0, case1, case2}
+
+	assert.NotEmpty(t, cases)
+
+	for i, messageLinesSet := range cases {
+		//nolint:paralleltest // All tests being parallel results in early exit.
+		t.Run("TestCase"+strconv.Itoa(i), func(t *testing.T) {
+			results := make(chan reassembleAuditdEventResult, 1)
+
+			reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
+				ctx:     ctx,
+				results: results,
+				after:   time.Time{},
+			})
+			if err != nil {
+				t.Fatalf("failed to create resassembler - %s", err)
+			}
+			defer reassembler.Close()
+
+			scanner := bufio.NewScanner(strings.NewReader(messageLinesSet))
+
+			for scanner.Scan() {
+				message, err := auparse.ParseLogLine(scanner.Text())
+				if err != nil {
+					t.Fatalf("parse log line failed for case %d - %s", i, err)
+				}
+
+				x := make(chan struct{})
+				go func() {
+					reassembler.PushMessage(message)
+					close(x)
+				}()
+
+				select {
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				case <-x:
+				}
+			}
+
+			// Force event to be spat out.
+			_ = reassembler.Close()
+
+			select {
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case r := <-results:
+				if r.err != nil {
+					t.Fatalf("got non-nil error for case %d - %s", i, r.err)
+				}
+			}
+		})
 	}
 }

@@ -13,6 +13,10 @@ require (
 	golang.org/x/sync v0.1.0
 )
 
+replace (
+	github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
+)
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
