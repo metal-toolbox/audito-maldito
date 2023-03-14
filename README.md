@@ -23,7 +23,7 @@ with `sysctl <sysctl-name>`:
 Currently, the program will exit with a non-zero exit status if a single
 failure occurs when reading audit log files. The probability of such an
 error occurring may increase due to log rotation. The program was designed to
-be restarted in the event of an unexpected exit (i.e., through kuberenetes).
+be restarted in the event of an unexpected exit (i.e., through Kubernetes).
 This error handling pattern may be revisited in the future - but it assumes
 the parent process will restart the program when a failure occurs.
 
