@@ -103,12 +103,19 @@ Example:
 
 ## Cautions
 
+#### SSH certificate support
+
+Currently only user-supplied SSH certificates are fully supported. Users who
+authenticate with a password or SSH key pair will produce `UserLogin` events,
+but not `UserAction` events. This will be addressed in a future release.
+
 #### inotify limits
 
 This program relies on inotify. As a result, it may hit limits on inotify
 resources. This can be more problematic on systems running scaling workloads
 (such as container hosts). Check the following sysctls for more information
 with `sysctl <sysctl-name>`:
+
   - `fs.inotify.max_user_instances`
   - `fs.inotify.max_user_watches`
 
