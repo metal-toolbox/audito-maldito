@@ -21,11 +21,12 @@ import (
 
 const usage = `audito-maldito
 
-A daemon that reads a system's logs and generates audit events from them. 
-It only supports systemd's journal and it outputs logins in JSON format
-Refer README for more details on how to run it
+DESCRIPTION
+  audito-maldito is a daemon that monitors OpenSSH server logins and
+  produces structured audit events describing what authenticated users
+  did while logged in (e.g., what programs they executed).
 
-options:
+OPTIONS
 `
 
 var logger *zap.SugaredLogger
@@ -38,7 +39,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn fun
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
 
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
-	flagSet.StringVar(&bootID, "boot-id", "", "Boot-ID to read from the journal")
+	flagSet.StringVar(&bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
 	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
 	flagSet.Usage = func() {
