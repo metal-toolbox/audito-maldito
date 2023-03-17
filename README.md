@@ -16,6 +16,91 @@ please refer to [the auditevent library][auditevent-library].
 - systemd
 - OpenSSH server (sshd)
 
+## Audit event types
+
+#### `UserLogin`
+
+Occurs when a user logs in.
+
+Example:
+
+```json
+{
+  "component": "sshd",
+  "data": {
+    "Alg": "ECDSA-CERT SHA256",
+    "CA": "CA ED25519 SHA256:JKH45TJj6tNHO/E/VtWZGunEY7C8VLFjVFv6bDq/5VY=",
+    "SSHKeySum": "JKH45TJj6tNHO/E/VtWZGunEY7C8VLFjVFv6bDq/5VY",
+    "Serial": "350"
+  },
+  "loggedAt": "2023-03-17T13:37:01.952459Z",
+  "metadata": {
+    "auditId": "ffffffff-ffff-ffff-ffff-ffffffffffff"
+  },
+  "outcome": "succeeded",
+  "source": {
+    "extra": {
+      "port": "59145"
+    },
+    "type": "IP",
+    "value": "6.6.6.2"
+  },
+  "subjects": {
+    "loggedAs": "core",
+    "pid": "3076344",
+    "userID": "user@foo.com"
+  },
+  "target": {
+    "host": "blam",
+    "machine-id": "deadbeef"
+  },
+  "type": "UserLogin"
+}
+```
+
+#### `UserAction`
+
+Occurs when an authenticated user does something (example: the user
+executes `rizin`).
+
+Example:
+
+```json
+{
+  "component": "auditd",
+  "loggedAt": "2023-03-17T13:37:38.126Z",
+  "metadata": {
+    "auditId": "67",
+    "extra": {
+      "action": "executed",
+      "how": "bash",
+      "object": {
+        "primary": "/usr/local/bin/rizin",
+        "type": "file"
+      }
+    }
+  },
+  "outcome": "failed",
+  "source": {
+    "extra": {
+      "port": "56734"
+    },
+    "type": "IP",
+    "value": "6.6.6.2"
+  },
+  "subjects": {
+    "loggedAs": "core",
+    "pid": "2868326",
+    "userID": "user@foo.com"
+  },
+  "target": {
+    "host": "the-best-computer",
+    "machine-id": "deadbeef"
+  },
+  "type": "UserAction"
+}
+```
+
 ## Cautions
 
 #### inotify limits
