@@ -11,6 +11,7 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
@@ -31,10 +32,11 @@ OPTIONS
 
 var logger *zap.SugaredLogger
 
-func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn func() (*zap.Logger, error)) error {
+func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
+	logLevel := zapcore.DebugLevel // TODO: Switch default back to zapcore.ErrorLevel.
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
 
@@ -42,6 +44,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn fun
 	flagSet.StringVar(&bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
 	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
+	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flagSet.PrintDefaults()
@@ -53,7 +56,14 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, newLoggerFn fun
 		return err
 	}
 
-	l, err := newLoggerFn()
+	if optLoggerConfig == nil {
+		cfg := zap.NewProductionConfig()
+		optLoggerConfig = &cfg
+	}
+
+	optLoggerConfig.Level = zap.NewAtomicLevelAt(logLevel)
+
+	l, err := optLoggerConfig.Build()
 	if err != nil {
 		return err
 	}

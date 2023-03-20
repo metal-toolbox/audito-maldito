@@ -77,7 +77,7 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	appErrs := make(chan error, 1)
 	go func() {
-		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerFn)
+		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerConfig())
 	}()
 
 	err := appHealth.WaitForReadyCtxOrTimeout(ctx, time.Minute)

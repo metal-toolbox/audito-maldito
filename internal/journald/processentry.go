@@ -214,10 +214,24 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		evt = evt.WithData(ed)
 	}
 
+	var debugLogger *zap.SugaredLogger
+	if logger.Level() == zap.DebugLevel {
+		debugLogger = logger.With("eventPID", config.pid)
+		debugLogger.Debugln("writing event to auditevent writer...")
+	}
+
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
 		return fmt.Errorf("failed to write event: %w", err)
+	}
+
+	if debugLogger != nil {
+		debugLogger.Debugln("writing event to remote user logins channel...")
+
+		defer func() {
+			debugLogger.Debugln("finished writing event to remote user logins channel")
+		}()
 	}
 
 	select {
