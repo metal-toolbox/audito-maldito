@@ -10,8 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"go.uber.org/zap"
-
 	"github.com/metal-toolbox/audito-maldito/internal/app"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
@@ -27,9 +25,5 @@ func mainWithError() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	newLoggerFn := func() (*zap.Logger, error) {
-		return zap.NewProduction()
-	}
-
-	return app.Run(ctx, os.Args, common.NewHealth(), newLoggerFn)
+	return app.Run(ctx, os.Args, common.NewHealth(), nil)
 }

@@ -52,6 +52,12 @@ type sessionTracker struct {
 }
 
 func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
+	var debugLogger *zap.SugaredLogger
+	if logger.Level() == zap.DebugLevel {
+		debugLogger = logger.With("RemoteUserLogin", rul)
+		debugLogger.Debugln("new remote user login")
+	}
+
 	err := rul.Validate()
 	if err != nil {
 		return &sessionTrackerError{
@@ -62,13 +68,26 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	}
 
 	// Check if there is an auditd session for this login.
-	for _, u := range o.sessIDsToUsers {
+	for asi, u := range o.sessIDsToUsers {
 		if u.srcPID == rul.PID {
+			if debugLogger != nil {
+				debugLogger.With(
+					"auditSessionID", asi,
+					"auditSessionStartTime", u.added,
+					"numCachedAuditEvents", len(u.cached),
+					"hasRUL", u.hasRUL).
+					Debugln("found existing audit session for remote user login")
+			}
+
 			u.hasRUL = true
 			u.login = rul
 
 			return u.writeAndClearCache(o.eventWriter)
 		}
+	}
+
+	if debugLogger != nil {
+		debugLogger.Debugln("no matching audit session found")
 	}
 
 	_, hasIt := o.pidsToRULs[rul.PID]
@@ -93,14 +112,28 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		return nil
 	}
 
-	u, hasSession := o.sessIDsToUsers[event.Session]
+	var debugLogger *zap.SugaredLogger
 	if logger.Level() == zap.DebugLevel {
-		logger.Debugf("user: %s | session: %s | has-session: %t | event-type: %s | summary: %v",
-			event.User.Names, event.Session, hasSession, event.Type, event.Summary)
+		debugLogger = logger.With(
+			"auditEvent", *event,
+			"auditEventType", event.Type.String(),
+			"auditSessionID", event.Session)
+		debugLogger.Debugln("new audit event")
 	}
+
+	u, hasSession := o.sessIDsToUsers[event.Session]
+	//nolint:nestif // Refactor later.
 	if hasSession {
 		// Either write the audit event to the event writer
 		// or cache it for later.
+
+		if debugLogger != nil {
+			debugLogger.With(
+				"auditSessionStartTime", u.added,
+				"numCachedAuditEvents", len(u.cached),
+				"hasRUL", u.hasRUL).
+				Debugln("found existing audit session for audit event")
+		}
 
 		if u.hasRUL {
 			// It looks like AUDIT_CRED_DISP indicates the
@@ -135,12 +168,20 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		// Create a new audit session.
 
 		if event.Type != auparse.AUDIT_LOGIN {
+			if debugLogger != nil {
+				debugLogger.Debugln("skipping creation of new audit session for audit event")
+			}
+
 			// It appears AUDIT_LOGIN indicates the
 			// canonical start of a user session.
 			// At least, it is the event type
 			// associated with a user-specific
 			// sshd process.
 			return nil
+		}
+
+		if debugLogger != nil {
+			debugLogger.Debugln("creating new audit session for audit event")
 		}
 
 		srcPID, err := strconv.Atoi(event.Process.PID)
@@ -159,6 +200,10 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		}
 
 		if rul, hasRUL := o.pidsToRULs[srcPID]; hasRUL {
+			if debugLogger != nil {
+				debugLogger.Debugln("found existing remote user login for new audit session")
+			}
+
 			delete(o.pidsToRULs, srcPID)
 
 			u.hasRUL = true
@@ -177,6 +222,14 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 			return nil
 		}
+
+		if debugLogger != nil {
+			debugLogger.Debugln("no existing remote user login for new audit session")
+		}
+	}
+
+	if debugLogger != nil {
+		debugLogger.Debugln("caching audit event")
 	}
 
 	// Cache the event if the audit session does not have
@@ -188,16 +241,44 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 }
 
 func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
+	var debugLogger *zap.SugaredLogger
+	if logger.Level() == zap.DebugLevel {
+		debugLogger = logger.With(
+			"cacheCleanup", "deleteUsersWithoutLoginsBefore",
+			"before", t.String())
+	}
+
 	for id, u := range o.sessIDsToUsers {
 		if !u.hasRUL && u.added.Before(t) {
+			if debugLogger != nil {
+				debugLogger.With(
+					"auditSessionID", id,
+					"auditSessionStartTime", u.added.String()).
+					Debugln("removing unused audit session")
+			}
+
 			delete(o.sessIDsToUsers, id)
 		}
 	}
 }
 
 func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
+	var debugLogger *zap.SugaredLogger
+	if logger.Level() == zap.DebugLevel {
+		debugLogger = logger.With(
+			"cacheCleanup", "deleteRemoteUserLoginsBefore",
+			"before", t.String())
+	}
+
 	for pid, userLogin := range o.pidsToRULs {
 		if userLogin.Source.LoggedAt.Before(t) {
+			if debugLogger != nil {
+				debugLogger.With(
+					"pid", pid,
+					"source", *userLogin.Source).
+					Debugln("removing unused remote user login")
+			}
+
 			delete(o.pidsToRULs, pid)
 		}
 	}
