@@ -105,7 +105,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	logDirReader, err := auditd.StartLogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
-		return fmt.Errorf("failed to create audit dir reader for '%s' - %w",
+		return fmt.Errorf("failed to create linux audit dir reader for '%s' - %w",
 			auditLogDirPath, err)
 	}
 
@@ -115,7 +115,13 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		h.OnReady()
 	}()
 
-	eg.Go(logDirReader.Wait)
+	eg.Go(func() error {
+		err := logDirReader.Wait()
+		if logger.Level() == zap.DebugLevel {
+			logger.Debugf("linux audit log dir reader worker exited (%v)", err)
+		}
+		return err
+	})
 
 	lastReadJournalTS := lastReadJournalTimeStamp()
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
@@ -135,7 +141,12 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			CurrentTS: lastReadJournalTS,
 			Health:    h,
 		}
-		return jp.Read(groupCtx)
+
+		err := jp.Read(groupCtx)
+		if logger.Level() == zap.DebugLevel {
+			logger.Debugf("journald worker exited (%v)", err)
+		}
+		return err
 	})
 
 	h.AddReadiness()
@@ -147,7 +158,12 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			EventW: eventWriter,
 			Health: h,
 		}
-		return ap.Read(groupCtx)
+
+		err := ap.Read(groupCtx)
+		if logger.Level() == zap.DebugLevel {
+			logger.Debugf("audit worker exited (%v)", err)
+		}
+		return err
 	})
 
 	if err := eg.Wait(); err != nil {
