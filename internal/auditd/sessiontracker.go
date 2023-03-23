@@ -14,7 +14,7 @@ import (
 )
 
 // newSessionTracker returns a new instance of a sessionTracker.
-func newSessionTracker(eventWriter *auditevent.EventWriter) *sessionTracker {
+func newSessionTracker(eventWriter common.AuditEventWriter) *sessionTracker {
 	return &sessionTracker{
 		sessIDsToUsers: make(map[string]*user),
 		pidsToRULs:     make(map[int]common.RemoteUserLogin),
@@ -48,7 +48,7 @@ type sessionTracker struct {
 
 	// eventWriter is the auditevent.EventWriter to write
 	// the resulting audit event to.
-	eventWriter *auditevent.EventWriter
+	eventWriter common.AuditEventWriter
 }
 
 func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
@@ -330,7 +330,7 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	return evt
 }
 
-func (o *user) writeAndClearCache(writer *auditevent.EventWriter) error {
+func (o *user) writeAndClearCache(writer common.AuditEventWriter) error {
 	if len(o.cached) == 0 {
 		return nil
 	}

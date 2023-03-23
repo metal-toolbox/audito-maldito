@@ -97,7 +97,7 @@ type processEntryConfig struct {
 	machineID string
 	when      time.Time
 	pid       string
-	eventW    *auditevent.EventWriter
+	eventW    common.AuditEventWriter
 }
 
 func processEntry(config *processEntryConfig) error {
@@ -235,6 +235,11 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	}
 
 	select {
+	case <-time.After(time.Minute):
+		if debugLogger != nil {
+			debugLogger.Debugln("timed-out writing remote user login event to logins channel")
+		}
+		return nil
 	case <-config.ctx.Done():
 		return nil
 	case config.logins <- common.RemoteUserLogin{

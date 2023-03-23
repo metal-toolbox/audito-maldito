@@ -8,7 +8,6 @@ import (
 	"github.com/elastic/go-libaudit/v2"
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
-	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
@@ -45,8 +44,8 @@ type Auditd struct {
 	// remotely through a service like sshd.
 	Logins <-chan common.RemoteUserLogin
 
-	// EventW is the auditevent.EventWriter to write events to.
-	EventW *auditevent.EventWriter
+	// EventW is the common.AuditEventWriter to write events to.
+	EventW common.AuditEventWriter
 
 	Health *common.Health
 }
@@ -80,23 +79,56 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	o.Health.OnReady()
 
+	var debugLogger *zap.SugaredLogger
+	if logger.Level().Enabled(zap.DebugLevel) {
+		debugLogger = logger.Named("audit worker")
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			if debugLogger != nil {
+				debugLogger.Debugln("<-ctx.Done()")
+			}
+
 			return ctx.Err()
 		case <-staleDataTicker.C:
+			if debugLogger != nil {
+				debugLogger.Debugln("<-staleDataTicker start")
+			}
+
 			aMinuteAgo := time.Now().Add(-staleDataCleanupInterval)
 
 			tracker.deleteUsersWithoutLoginsBefore(aMinuteAgo)
 			tracker.deleteRemoteUserLoginsBefore(aMinuteAgo)
+
+			if debugLogger != nil {
+				debugLogger.Debugln("<-staleDataTicker finished")
+			}
 		case remoteLogin := <-o.Logins:
+			if debugLogger != nil {
+				debugLogger.Debugln("<-o.Logins start")
+			}
+
 			err = tracker.remoteLogin(remoteLogin)
 			if err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
+
+			if debugLogger != nil {
+				debugLogger.Debugln("<-o.Logins finished")
+			}
 		case err = <-parseAuditLogsDone:
+			if debugLogger != nil {
+				debugLogger.Debugln("<-parseAuditLogsDone")
+			}
+
 			return fmt.Errorf("audit log parser exited unexpectedly with error - %w", err)
 		case result := <-reassembleAuditdEvents:
+			if debugLogger != nil {
+				debugLogger.Debugln("<-reassembleAuditdEvents start")
+			}
+
 			if result.err != nil {
 				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
 			}
@@ -105,6 +137,10 @@ func (o *Auditd) Read(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
 					result.event.Type, result.event.Sequence, err)
+			}
+
+			if debugLogger != nil {
+				debugLogger.Debugln("<-reassembleAuditdEvents finished")
 			}
 		}
 	}

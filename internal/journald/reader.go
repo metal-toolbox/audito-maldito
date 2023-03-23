@@ -9,8 +9,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/metal-toolbox/auditevent"
-
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
@@ -24,7 +22,7 @@ type Processor struct {
 	MachineID string
 	NodeName  string
 	Distro    util.DistroType
-	EventW    *auditevent.EventWriter
+	EventW    common.AuditEventWriter
 	Logins    chan<- common.RemoteUserLogin
 	CurrentTS uint64 // Microseconds since unix epoch.
 	Health    *common.Health
