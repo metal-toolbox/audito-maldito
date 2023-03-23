@@ -15,16 +15,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          generate_release_notes: true
-
   container-main:
-    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
+    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@abstract-and-log-auditevent-writer
     with:
       name: audito-maldito
-      tag: ${{ github.ref_name }}
+      tag: ${{ github.ref_name }}-test
       registry_org: ${{ github.repository }}
       dockerfile_path: Dockerfile
       platforms: linux/amd64,linux/arm64
