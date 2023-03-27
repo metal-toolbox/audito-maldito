@@ -354,32 +354,20 @@ func readFilePathLines(ctx context.Context, fsi fileSystem, filePath string, l c
 // It writes each line to the lines chan and returns the number of
 // bytes read from reader.
 func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int64, error) {
-	counter := &readCounter{reader: reader}
-
-	scanner := bufio.NewScanner(counter)
+	scanner := bufio.NewScanner(reader)
+	var numBytesRead int64
 
 	for scanner.Scan() {
+		line := scanner.Text()
+		numBytesRead += int64(len(line) + 1)
+
 		select {
 		case <-ctx.Done():
-			return counter.count, ctx.Err()
-		case lines <- scanner.Text():
+			return numBytesRead, ctx.Err()
+		case lines <- line:
 			// continue.
 		}
 	}
 
-	return counter.count, scanner.Err()
-}
-
-// readCounter counts the number of bytes read from the inner reader.
-type readCounter struct {
-	reader io.Reader
-	count  int64
-}
-
-// Read reads from the inner reader field, functioning identically to
-// io.Reader. It tracks the number of bytes read from the reader.
-func (o *readCounter) Read(p []byte) (int, error) {
-	n, err := o.reader.Read(p)
-	o.count += int64(n)
-	return n, err
+	return numBytesRead, scanner.Err()
 }
