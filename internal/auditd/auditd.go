@@ -64,7 +64,12 @@ func (o *Auditd) Read(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
 	}
-	defer reassembler.Close()
+	// TODO: Calling reassembler.Close is not safe because
+	// it then calls our reassemblerCB, which then tries to
+	// write to the reassembleAuditdEvents channel - which
+	// no Go routine will be listening to it. This is super
+	// unclear from the Close documentation.
+	// defer reassembler.Close()
 
 	go maintainReassemblerLoop(ctx, reassembler, reassemblerInterval)
 
