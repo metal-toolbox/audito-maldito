@@ -125,7 +125,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	lastReadJournalTS := lastReadJournalTimeStamp()
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
-	logins := make(chan common.RemoteUserLogin)
+	logins := make(chan common.RemoteUserLogin, 100)
 
 	logger.Infoln("starting workers...")
 
