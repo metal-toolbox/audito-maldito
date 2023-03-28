@@ -53,7 +53,7 @@ type sessionTracker struct {
 
 func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level() == zap.DebugLevel {
+	if logger.Level().Enabled(zap.DebugLevel) {
 		debugLogger = logger.With("RemoteUserLogin", rul)
 		debugLogger.Debugln("new remote user login")
 	}
@@ -113,7 +113,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 	}
 
 	var debugLogger *zap.SugaredLogger
-	if logger.Level() == zap.DebugLevel {
+	if logger.Level().Enabled(zap.DebugLevel) {
 		debugLogger = logger.With(
 			"auditEvent", *event,
 			"auditEventType", event.Type.String(),
@@ -242,7 +242,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 
 func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level() == zap.DebugLevel {
+	if logger.Level().Enabled(zap.DebugLevel) {
 		debugLogger = logger.With(
 			"cacheCleanup", "deleteUsersWithoutLoginsBefore",
 			"before", t.String())
@@ -264,7 +264,7 @@ func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 
 func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level() == zap.DebugLevel {
+	if logger.Level().Enabled(zap.DebugLevel) {
 		debugLogger = logger.With(
 			"cacheCleanup", "deleteRemoteUserLoginsBefore",
 			"before", t.String())

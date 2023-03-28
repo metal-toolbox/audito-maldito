@@ -117,7 +117,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	eg.Go(func() error {
 		err := logDirReader.Wait()
-		if logger.Level() == zap.DebugLevel {
+		if logger.Level().Enabled(zap.DebugLevel) {
 			logger.Debugf("linux audit log dir reader worker exited (%v)", err)
 		}
 		return err
@@ -143,7 +143,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		}
 
 		err := jp.Read(groupCtx)
-		if logger.Level() == zap.DebugLevel {
+		if logger.Level().Enabled(zap.DebugLevel) {
 			logger.Debugf("journald worker exited (%v)", err)
 		}
 		return err
@@ -160,7 +160,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		}
 
 		err := ap.Read(groupCtx)
-		if logger.Level() == zap.DebugLevel {
+		if logger.Level().Enabled(zap.DebugLevel) {
 			logger.Debugf("audit worker exited (%v)", err)
 		}
 		return err

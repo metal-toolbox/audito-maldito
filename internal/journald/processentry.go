@@ -215,7 +215,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	}
 
 	var debugLogger *zap.SugaredLogger
-	if logger.Level() == zap.DebugLevel {
+	if logger.Level().Enabled(zap.DebugLevel) {
 		debugLogger = logger.With("eventPID", config.pid)
 		debugLogger.Debugln("writing event to auditevent writer...")
 	}
