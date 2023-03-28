@@ -315,6 +315,7 @@ func TestRotatingFile_Lifecycle(t *testing.T) {
 			return tf, nil
 		},
 		lines: linesRead,
+		bs:    &backoffSleeper{},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -373,6 +374,7 @@ func TestRotatingFile_OpenErr(t *testing.T) {
 			return nil, expErr
 		},
 		lines: make(chan string),
+		bs:    &backoffSleeper{},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -401,6 +403,7 @@ func TestRotatingFile_SeekErr(t *testing.T) {
 			return tf, nil
 		},
 		lines: make(chan string),
+		bs:    &backoffSleeper{},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -430,6 +433,7 @@ func TestRotatingFile_ReadLinesErr(t *testing.T) {
 			return tf, nil
 		},
 		lines: make(chan string),
+		bs:    &backoffSleeper{},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -544,7 +548,7 @@ func TestReadLines(t *testing.T) {
 		}
 	}()
 
-	n, err := readLines(ctx, tf, linesRead)
+	n, err := readLines(ctx, tf, linesRead, &backoffSleeper{})
 	cancelFn()
 	if err != nil {
 		t.Fatal(err)
@@ -567,7 +571,7 @@ func TestReadLines_ReadErr(t *testing.T) {
 		readErr: errors.New("smash"),
 	}
 
-	_, err := readLines(ctx, tf, nil)
+	_, err := readLines(ctx, tf, nil, &backoffSleeper{})
 	cancelFn()
 	assert.ErrorIs(t, err, tf.readErr)
 }
@@ -582,10 +586,58 @@ func TestReadLines_Cancel(t *testing.T) {
 		data: []byte("beep boop\n"),
 	}
 
-	_, err := readLines(ctx, tf, make(chan string))
+	_, err := readLines(ctx, tf, make(chan string), &backoffSleeper{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected error type: %T - got: %T", context.Canceled, err)
 	}
+}
+
+func TestBackoffSleeper_SymmetricIncDecs(t *testing.T) {
+	t.Parallel()
+
+	b := &backoffSleeper{}
+
+	numIncrements := intn(t, 0, 10)
+
+	for i := 0; i < int(numIncrements); i++ {
+		b.inc()
+	}
+
+	for i := 0; i < int(numIncrements); i++ {
+		b.dec()
+	}
+
+	assert.Equal(t, b.sleepFor, time.Duration(0))
+}
+
+func TestBackoffSleeper_IncIsNonZero(t *testing.T) {
+	t.Parallel()
+
+	b := &backoffSleeper{}
+
+	b.inc()
+
+	assert.Greater(t, b.sleepFor, time.Duration(0))
+}
+
+func TestBackoffSleeper_NoNegativeSleep(t *testing.T) {
+	t.Parallel()
+
+	b := &backoffSleeper{}
+
+	numIncrements := intn(t, 0, 10)
+
+	for i := 0; i < int(numIncrements); i++ {
+		b.inc()
+	}
+
+	numDecrements := intn(t, numIncrements, numIncrements+1)
+
+	for i := 0; i < int(numDecrements); i++ {
+		b.dec()
+	}
+
+	assert.GreaterOrEqual(t, b.sleepFor, time.Duration(0))
 }
 
 func testFileWithRandomLines(t *testing.T) *testFile {

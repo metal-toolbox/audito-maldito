@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -169,6 +170,7 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 		},
 		offset: 0,
 		lines:  o.lines,
+		bs:     &backoffSleeper{},
 	}
 
 	for {
@@ -233,6 +235,7 @@ type rotatingFile struct {
 	openFn func() (io.ReadSeekCloser, error)
 	offset int64
 	lines  chan<- string
+	bs     *backoffSleeper
 }
 
 func (o *rotatingFile) setOffset(i int64) {
@@ -289,7 +292,7 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 		return fmt.Errorf("failed to seek to offset %d in rotating file - %w", off, err)
 	}
 
-	numBytesRead, err := readLines(ctx, f, o.lines)
+	numBytesRead, err := readLines(ctx, f, o.lines, o.bs)
 	if err != nil {
 		return fmt.Errorf("failed to read lines from rotating file starting at offset %d - %w",
 			off, err)
@@ -337,9 +340,16 @@ func (o *osFileSystem) Open(filePath string) (io.ReadSeekCloser, error) {
 	return os.Open(filePath)
 }
 
-// readFilePathLines reads all the data from filePath using bufio.ScanLines.
-// It writes each line to the lines chan and returns the number of bytes
-// read from reader.
+// readFilePathLines reads from filePath and writes each line to
+// the lines chan. It then returns the total number of bytes read
+// in terms of lines processed (i.e., if it reads 100 bytes, but
+// only 90 of those bytes were lines ending with a newline, it
+// returns 90). Buffered data is not counted in the byte count.
+//
+// It is similar to os.ReadFile - but avoids reading the entire
+// file's contents into memory at once.
+//
+// An io.EOF error is not returned to the caller.
 func readFilePathLines(ctx context.Context, fsi fileSystem, filePath string, l chan<- string) (int64, error) {
 	f, err := fsi.Open(filePath)
 	if err != nil {
@@ -347,19 +357,76 @@ func readFilePathLines(ctx context.Context, fsi fileSystem, filePath string, l c
 	}
 	defer f.Close()
 
-	return readLines(ctx, f, l)
-}
-
-// readLines reads data from reader until EOF using bufio.ScanLines.
-// It writes each line to the lines chan and returns the number of
-// bytes read from reader.
-func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int64, error) {
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(f)
 	var numBytesRead int64
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		numBytesRead += int64(len(line) + 1)
+		numBytesRead += int64(len(line)) + 1
+
+		select {
+		case <-ctx.Done():
+			return numBytesRead, ctx.Err()
+		case l <- line:
+			// continue.
+		}
+	}
+
+	return numBytesRead, scanner.Err()
+}
+
+// readLines reads from reader and writes each line to the lines chan.
+// It then returns the total number of bytes read in terms of lines
+// processed (i.e., if it reads 100 bytes, but only 90 of those bytes
+// were lines ending with a newline, it returns 90). Buffered data is
+// not counted in the byte count.
+//
+// The supplied backoffSleeper is used to gradually backoff reads that
+// result in an io.EOF. The assumption is that the caller will execute
+// this function again when more data is available to read. Making such
+// a determination is left up to the caller.
+//
+// An io.EOF error is not returned to the caller.
+func readLines(ctx context.Context, reader io.Reader, lines chan<- string, backoff *backoffSleeper) (int64, error) {
+	bufioReader := bufio.NewReader(reader)
+	var numBytesRead int64
+
+	for {
+		lineRaw, err := bufioReader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// Receiving an io.EOF means that no newline
+				// character was found. Instead of returning
+				// that to the caller, we can use a backoff
+				// coupled with returning a nil error to
+				// ultimately allow the caller to try again.
+				err = backoff.incAndSleep(ctx)
+				if err != nil {
+					return numBytesRead, err
+				}
+
+				return numBytesRead, nil
+			}
+
+			return numBytesRead, err
+		}
+
+		backoff.dec()
+
+		lineLen := len(lineRaw)
+
+		numBytesRead += int64(lineLen)
+
+		var line string
+		if lineLen > 0 {
+			// Remove the trailing newline character.
+			//
+			// Yes, this can result in an empty string.
+			// Allowing an empty string maintains
+			// backwards compatibility with our
+			// existing unit tests.
+			line = lineRaw[0 : lineLen-1]
+		}
 
 		select {
 		case <-ctx.Done():
@@ -368,6 +435,40 @@ func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int6
 			// continue.
 		}
 	}
+}
 
-	return numBytesRead, scanner.Err()
+// backoffSleeper helps implement a backoff timer that results in
+// an incremental sleep. The increments are focused towards file
+// IO. Being completely honest, they are a SWAG at best.
+type backoffSleeper struct {
+	sleepFor time.Duration
+}
+
+// incAndSleep increments the sleep time and then sleeps for the
+// resulting time.Duration or until ctx is marked as done.
+func (o *backoffSleeper) incAndSleep(ctx context.Context) error {
+	o.inc()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(o.sleepFor):
+		return nil
+	}
+}
+
+const sleepIncDec = 300 * time.Millisecond
+
+// inc increments the sleep time.
+func (o *backoffSleeper) inc() {
+	if o.sleepFor <= 3*time.Second {
+		o.sleepFor += sleepIncDec
+	}
+}
+
+// dec decrements the sleep time.
+func (o *backoffSleeper) dec() {
+	if o.sleepFor > 0 {
+		o.sleepFor -= sleepIncDec
+	}
 }
