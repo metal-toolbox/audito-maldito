@@ -9,5 +9,5 @@ image:
 
 .PHONY: rsyslog
 rsyslog:
-	docker run -ti -v ${PWD}/config:/config -v ${HOME}/.audit:/audit -e RSYSLOG_CONF=/config/rsyslog.conf  ghcr.io/metal-toolbox/audito-maldito-rsyslog:v0.0.1
+	docker run -ti -v ${PWD}/config:/config -v /var/log/audit/:/var/log/audit/ -e RSYSLOG_CONF=/config/rsyslog.conf  ghcr.io/metal-toolbox/audito-maldito-rsyslog:v0.0.1
 
