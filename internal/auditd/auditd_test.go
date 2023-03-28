@@ -3,8 +3,11 @@ package auditd
 import (
 	"bufio"
 	"context"
+	_ "embed"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -434,4 +437,73 @@ type=PROCTITLE msg=audit(1671230063.745:657579): proctitle=2F7573722F7362696E2F6
 			}
 		})
 	}
+}
+
+//go:embed testdata/good/03-ls-slash-root.txt
+var reassemblerCloseTestEvents string
+
+func TestReassemblerCloseFlushesEvents(t *testing.T) {
+	t.Parallel()
+
+	// Split the events into 1 chunks.
+	nEvents := 3
+	loginEvents := []string{goodAuditd00}
+	eventSlice := strings.Split(reassemblerCloseTestEvents, "\n")[:nEvents]
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+
+	lines, allowWritesFn, writesDone := newTestLogReader(ctx,
+		append(loginEvents, eventSlice...))
+
+	var aucounter atomic.Int32
+
+	// create reassembler
+	reas, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			aucounter.Add(1)
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
+	})
+	assert.NoError(t, err, "failed to create reassembler")
+
+	// create session tracker
+	wg := sync.WaitGroup{}
+
+	allowWritesFn()
+
+	wg.Add(1)
+
+	// This consumes the raw events and pushes them into the reassembler.
+	// this is similar to the auditd Read function go routine which calls
+	// this the `parseAuditLogs` function.
+	// It will stop listening once the context is cancelled.
+	go func() {
+		defer wg.Done()
+
+		err := parseAuditLogs(ctx, lines, reas)
+		assert.ErrorIs(t, err, context.Canceled, "expected context to be cancelled")
+	}()
+
+	<-writesDone
+
+	// Cancel reading events before we close
+	cancelFn()
+
+	wg.Wait()
+
+	eventsBeforeClose := int(aucounter.Load())
+
+	// Close the reassembler
+	reas.Close()
+
+	eventsAfterClose := int(aucounter.Load())
+
+	diff := eventsAfterClose - eventsBeforeClose
+
+	// Check that the reassembler flushed all events.
+	// The number of coalesced events is simply 1 as it aggregates the audit
+	// events and assembles it with all the info it can get.
+	assert.Equal(t, 1, diff, "expected 1 events to be flushed")
 }
