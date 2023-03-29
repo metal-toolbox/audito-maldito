@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 )
@@ -310,11 +311,16 @@ func TestRotatingFile_Lifecycle(t *testing.T) {
 	}()
 
 	rf := &rotatingFile{
-		openFn: func() (io.ReadSeekCloser, error) {
+		openFn: func() (statReadSeekCloser, error) {
 			tf.closed = false
 			return tf, nil
 		},
-		lines: linesRead,
+		lines:  linesRead,
+		boConf: backoff.NewExponentialBackOff(),
+		boFn: func(operation backoff.Operation, _ backoff.BackOff) error {
+			// TODO: How do we handle back-offs in unit tests?
+			return operation()
+		},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -369,10 +375,15 @@ func TestRotatingFile_OpenErr(t *testing.T) {
 	expErr := errors.New("got anything to declare")
 
 	rf := &rotatingFile{
-		openFn: func() (io.ReadSeekCloser, error) {
+		openFn: func() (statReadSeekCloser, error) {
 			return nil, expErr
 		},
-		lines: make(chan string),
+		lines:  make(chan string),
+		boConf: backoff.NewExponentialBackOff(),
+		boFn: func(operation backoff.Operation, _ backoff.BackOff) error {
+			// TODO: How do we handle back-offs in unit tests?
+			return operation()
+		},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -397,10 +408,15 @@ func TestRotatingFile_SeekErr(t *testing.T) {
 	}
 
 	rf := &rotatingFile{
-		openFn: func() (io.ReadSeekCloser, error) {
+		openFn: func() (statReadSeekCloser, error) {
 			return tf, nil
 		},
-		lines: make(chan string),
+		lines:  make(chan string),
+		boConf: backoff.NewExponentialBackOff(),
+		boFn: func(operation backoff.Operation, _ backoff.BackOff) error {
+			// TODO: How do we handle back-offs in unit tests?
+			return operation()
+		},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -426,10 +442,15 @@ func TestRotatingFile_ReadLinesErr(t *testing.T) {
 	}
 
 	rf := &rotatingFile{
-		openFn: func() (io.ReadSeekCloser, error) {
+		openFn: func() (statReadSeekCloser, error) {
 			return tf, nil
 		},
-		lines: make(chan string),
+		lines:  make(chan string),
+		boConf: backoff.NewExponentialBackOff(),
+		boFn: func(operation backoff.Operation, _ backoff.BackOff) error {
+			// TODO: How do we handle back-offs in unit tests?
+			return operation()
+		},
 	}
 
 	err := rf.read(ctx, fsnotify.Create)
@@ -693,27 +714,39 @@ type testFileSystem struct {
 	filePathsToFiles map[string]*testFile
 }
 
-func (o *testFileSystem) Open(filePath string) (io.ReadSeekCloser, error) {
+func (o *testFileSystem) Open(filePath string) (statReadSeekCloser, error) {
 	f, hasIt := o.filePathsToFiles[filePath]
 	if hasIt {
 		return f, nil
 	}
 
-	return nil, os.ErrNotExist
+	return nil, backoff.Permanent(os.ErrNotExist)
 }
 
-// testFile implements the io.ReadSeekCloser interface.
+// testFile implements the statReadSeekCloser interface.
 type testFile struct {
+	statErr error
 	readErr error
 	seekErr error
+	name    string
+	mode    fs.FileMode
+	modTime time.Time
 	closed  bool
 	offset  int
 	data    []byte
 }
 
+func (o *testFile) Stat() (fs.FileInfo, error) {
+	if o.statErr != nil {
+		return nil, backoff.Permanent(o.statErr)
+	}
+
+	return &testFileStat{tf: o}, nil
+}
+
 func (o *testFile) Read(p []byte) (n int, err error) {
 	if o.readErr != nil {
-		return 0, o.readErr
+		return 0, backoff.Permanent(o.readErr)
 	}
 
 	if o.closed {
@@ -733,7 +766,7 @@ func (o *testFile) Read(p []byte) (n int, err error) {
 
 func (o *testFile) Seek(offset int64, whence int) (int64, error) {
 	if o.seekErr != nil {
-		return 0, o.seekErr
+		return 0, backoff.Permanent(o.seekErr)
 	}
 
 	if o.closed {
@@ -775,5 +808,34 @@ func (o *testFile) Truncate() {
 
 func (o *testFile) Close() error {
 	o.closed = true
+	return nil
+}
+
+// testFileStat implements the fs.FileInfo interface.
+type testFileStat struct {
+	tf *testFile
+}
+
+func (o *testFileStat) Name() string {
+	return o.tf.name
+}
+
+func (o *testFileStat) Size() int64 {
+	return int64(len(o.tf.data))
+}
+
+func (o *testFileStat) Mode() fs.FileMode {
+	return o.tf.mode
+}
+
+func (o *testFileStat) ModTime() time.Time {
+	return o.tf.modTime
+}
+
+func (o *testFileStat) IsDir() bool {
+	return false
+}
+
+func (o *testFileStat) Sys() any {
 	return nil
 }

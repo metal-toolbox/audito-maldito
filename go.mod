@@ -3,6 +3,7 @@ module github.com/metal-toolbox/audito-maldito
 go 1.19
 
 require (
+	github.com/cenkalti/backoff/v4 v4.2.0
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/elastic/go-libaudit/v2 v2.3.2
 	github.com/fsnotify/fsnotify v1.6.0
@@ -13,9 +14,7 @@ require (
 	golang.org/x/sync v0.1.0
 )
 
-replace (
-	github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
-)
+replace github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

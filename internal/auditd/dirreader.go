@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 )
 
 // StartLogDirReader creates and starts a LogDirReader for
@@ -164,11 +167,12 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 	mainLogPath := filepath.Join(o.dirPath, "audit.log")
 
 	mainLog := &rotatingFile{
-		openFn: func() (io.ReadSeekCloser, error) {
+		openFn: func() (statReadSeekCloser, error) {
 			return o.fs.Open(mainLogPath)
 		},
-		offset: 0,
 		lines:  o.lines,
+		boConf: backoff.NewExponentialBackOff(),
+		boFn:   backoff.Retry,
 	}
 
 	for {
@@ -204,15 +208,10 @@ func (o *LogDirReader) loopWithError(ctx context.Context) error {
 
 			initFileIndex++
 		case event := <-o.watcher.Events():
-			// TODO: Should this be buffered with a time.Timer?
 			if len(o.initFileNames) == 0 &&
 				len(event.Name) == len(mainLogPath) &&
 				event.Name == mainLogPath {
-				// TODO: Should we read in a separate thread?
-				// Reads are usually blocking operations that
-				// can only be interrupted by closing the
-				// relevant file descriptor.
-				err := mainLog.read(ctx, event.Op)
+				err := mainLog.readWithRetry(ctx, event.Op)
 				if err != nil {
 					return fmt.Errorf("failed to read from main audit log - %w", err)
 				}
@@ -230,9 +229,12 @@ type initialFileRead struct {
 // rotatingFile tails lines from a file that is rotated by
 // a logging mechanism.
 type rotatingFile struct {
-	openFn func() (io.ReadSeekCloser, error)
+	openFn func() (statReadSeekCloser, error)
+	lastSz int64
 	offset int64
 	lines  chan<- string
+	boConf backoff.BackOff
+	boFn   func(backoff.Operation, backoff.BackOff) error
 }
 
 func (o *rotatingFile) setOffset(i int64) {
@@ -245,6 +247,28 @@ func (o *rotatingFile) incOffsetBy(i int64) int64 {
 
 func (o *rotatingFile) getOffset() int64 {
 	return atomic.LoadInt64(&o.offset)
+}
+
+// readWithRetry calls read and retries according to the configured back-off.
+func (o *rotatingFile) readWithRetry(ctx context.Context, op fsnotify.Op) error {
+	return o.boFn(func() error {
+		err := o.read(ctx, op)
+		if err != nil {
+			if logger.Level().Enabled(zap.DebugLevel) {
+				logger.Debug("read-error", err)
+			}
+
+			if errors.Is(err, context.Canceled) {
+				// Force back-off retry to exit.
+				// See backoff.Retry for details.
+				return backoff.Permanent(err)
+			}
+
+			return err
+		}
+
+		return nil
+	}, o.boConf)
 }
 
 // read attempts to read from the reader returned by the openFn field
@@ -282,6 +306,22 @@ func (o *rotatingFile) read(ctx context.Context, op fsnotify.Op) error {
 		return fmt.Errorf("failed to open rotating file - %w", err)
 	}
 	defer f.Close()
+
+	fInfo, err := f.Stat()
+	if err != nil {
+		o.setOffset(0)
+		return err
+	}
+
+	currentSizeBytes := fInfo.Size()
+
+	if currentSizeBytes < o.lastSz {
+		// If true, then the file was likely rotated, so we need
+		// to start from the beginning of the file.
+		o.setOffset(0)
+	}
+
+	o.lastSz = currentSizeBytes
 
 	off := o.getOffset()
 	_, err = f.Seek(off, io.SeekStart)
@@ -327,19 +367,33 @@ func (o *fsnotifyWatcher) Close() error {
 // fileSystem abstracts a file system similar to Go's io/fs standard library.
 type fileSystem interface {
 	// Open opens a file for the given path.
-	Open(filePath string) (io.ReadSeekCloser, error)
+	Open(filePath string) (statReadSeekCloser, error)
+}
+
+// statReadSeekCloser abstracts a file that uses the os.Stat function and the
+// io.ReadSeekCloser interface.
+type statReadSeekCloser interface {
+	Stat() (fs.FileInfo, error)
+	io.ReadSeekCloser
 }
 
 // osFileSystem implements fileSystem using Go's os standard library.
 type osFileSystem struct{}
 
-func (o *osFileSystem) Open(filePath string) (io.ReadSeekCloser, error) {
+func (o *osFileSystem) Open(filePath string) (statReadSeekCloser, error) {
 	return os.Open(filePath)
 }
 
-// readFilePathLines reads all the data from filePath using bufio.ScanLines.
-// It writes each line to the lines chan and returns the number of bytes
-// read from reader.
+// readFilePathLines reads from filePath and writes each line to
+// the lines chan. It then returns the total number of bytes read
+// in terms of lines processed (i.e., if it reads 100 bytes, but
+// only 90 of those bytes were lines ending with a newline, it
+// returns 90). Buffered data is not counted in the byte count.
+//
+// It is similar to os.ReadFile - but avoids reading the entire
+// file's contents into memory at once.
+//
+// An io.EOF error is not returned to the caller.
 func readFilePathLines(ctx context.Context, fsi fileSystem, filePath string, l chan<- string) (int64, error) {
 	f, err := fsi.Open(filePath)
 	if err != nil {
@@ -350,16 +404,41 @@ func readFilePathLines(ctx context.Context, fsi fileSystem, filePath string, l c
 	return readLines(ctx, f, l)
 }
 
-// readLines reads data from reader until EOF using bufio.ScanLines.
-// It writes each line to the lines chan and returns the number of
-// bytes read from reader.
+// readLines reads from reader and writes each line to the lines chan.
+// It then returns the total number of bytes read in terms of lines
+// processed (i.e., if it reads 100 bytes, but only 90 of those bytes
+// were lines ending with a newline, it returns 90). Buffered data is
+// not counted in the byte count.
+//
+// An io.EOF error is not returned to the caller.
 func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int64, error) {
-	scanner := bufio.NewScanner(reader)
+	bufioReader := bufio.NewReader(reader)
 	var numBytesRead int64
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		numBytesRead += int64(len(line) + 1)
+	for {
+		lineRaw, err := bufioReader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return numBytesRead, nil
+			}
+
+			return numBytesRead, err
+		}
+
+		lineLen := len(lineRaw)
+
+		numBytesRead += int64(lineLen)
+
+		var line string
+		if lineLen > 0 {
+			// Remove the trailing newline character.
+			//
+			// Yes, this can result in an empty string.
+			// Allowing an empty string maintains
+			// backwards compatibility with our
+			// existing unit tests.
+			line = lineRaw[0 : lineLen-1]
+		}
 
 		select {
 		case <-ctx.Done():
@@ -368,6 +447,4 @@ func readLines(ctx context.Context, reader io.Reader, lines chan<- string) (int6
 			// continue.
 		}
 	}
-
-	return numBytesRead, scanner.Err()
 }
