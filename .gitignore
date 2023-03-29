@@ -4,3 +4,5 @@ live-instance-test
 coverage.out
 .vagrant
 rsyslog/rsyslog
+audito-maldito
+output.txt

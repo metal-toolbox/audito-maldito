@@ -75,13 +75,11 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 
 	a := Auditd{
 		Audits: lines,
-		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
 			t:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
 	}
 
 	exited := make(chan error, 1)
@@ -138,13 +136,11 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 
 	a := Auditd{
 		Audits: lines,
-		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
 			ctx:    ctx,
 			events: events,
 			t:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
 	}
 
 	exited := make(chan error, 1)

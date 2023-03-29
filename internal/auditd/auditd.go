@@ -10,8 +10,6 @@ import (
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
-
-	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
 // libaudit variables.
@@ -31,24 +29,11 @@ func SetLogger(l *zap.SugaredLogger) {
 // Auditd enables correlation of remote user logins (and the credential they
 // used to log in with, such as a SSH certificate) and Linux audit events.
 type Auditd struct {
-	// After filters audit events prior to a particular point in time.
-	// For example, using time.Now means all events that occurred
-	// before time.Now will be ignored.
-	//
-	// A zero time.Time means no events are ignored.
-	After time.Time
-
 	// Audits receives audit log lines from one or more audit files.
 	Audits <-chan string
 
-	// Logins receives common.RemoteUserLogin when a user logs in
-	// remotely through a service like sshd.
-	Logins <-chan common.RemoteUserLogin
-
 	// EventW is the auditevent.EventWriter to write events to.
 	EventW *auditevent.EventWriter
-
-	Health *common.Health
 }
 
 // TODO: Write documentation about creating a splunk query that shows
@@ -59,7 +44,6 @@ func (o *Auditd) Read(ctx context.Context) error {
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
 		ctx:     ctx,
 		results: reassembleAuditdEvents,
-		after:   o.After,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
@@ -73,6 +57,8 @@ func (o *Auditd) Read(ctx context.Context) error {
 	go maintainReassemblerLoop(ctx, reassembler, reassemblerInterval)
 
 	parseAuditLogsDone := make(chan error, 1)
+
+	// Here we set up parsing audit logs
 	go func() {
 		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler)
 	}()
@@ -82,24 +68,10 @@ func (o *Auditd) Read(ctx context.Context) error {
 	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
 
-	o.Health.OnReady()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-staleDataTicker.C:
-			aMinuteAgo := time.Now().Add(-staleDataCleanupInterval)
-
-			tracker.deleteUsersWithoutLoginsBefore(aMinuteAgo)
-			tracker.deleteRemoteUserLoginsBefore(aMinuteAgo)
-		case remoteLogin := <-o.Logins:
-			err = tracker.remoteLogin(remoteLogin)
-			if err != nil {
-				return fmt.Errorf("failed to handle remote user login - %w", err)
-			}
-		case err = <-parseAuditLogsDone:
-			return fmt.Errorf("audit log parser exited unexpectedly with error - %w", err)
 		case result := <-reassembleAuditdEvents:
 			if result.err != nil {
 				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
@@ -174,7 +146,6 @@ var _ libaudit.Stream = &reassemblerCB{}
 type reassemblerCB struct {
 	ctx     context.Context //nolint
 	results chan<- reassembleAuditdEventResult
-	after   time.Time
 }
 
 func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
@@ -190,10 +161,6 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 		}:
 		}
 
-		return
-	}
-
-	if event.Timestamp.Before(s.after) {
 		return
 	}
 

@@ -4,19 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 
-	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
-	"github.com/metal-toolbox/auditevent/helpers"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -32,7 +31,7 @@ OPTIONS
 
 var logger *zap.SugaredLogger
 
-func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig *zap.Config) error {
+func Run(ctx context.Context, osArgs []string, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
@@ -75,88 +74,71 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	logger = l.Sugar()
 
 	auditd.SetLogger(logger)
-	journald.SetLogger(logger)
 
-	distro, err := util.Distro()
+	_, err = util.Distro()
 	if err != nil {
 		return fmt.Errorf("failed to get os distro type: %w", err)
 	}
 
-	mid, miderr := common.GetMachineID()
+	_, miderr := common.GetMachineID()
 	if miderr != nil {
 		return fmt.Errorf("failed to get machine id: %w", miderr)
 	}
 
-	nodename, nodenameerr := common.GetNodeName()
+	_, nodenameerr := common.GetNodeName()
 	if nodenameerr != nil {
 		return fmt.Errorf("failed to get node name: %w", nodenameerr)
 	}
 
-	if err := common.EnsureFlushDirectory(); err != nil {
-		return fmt.Errorf("failed to ensure flush directory: %w", err)
-	}
-
 	eg, groupCtx := errgroup.WithContext(ctx)
 
-	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(groupCtx, auditlogpath, zapr.NewLogger(l))
-	if auditfileerr != nil {
-		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
-	}
-
-	logDirReader, err := auditd.StartLogDirReader(groupCtx, auditLogDirPath)
+	// open output file
+	fo, err := os.Create("output.txt")
 	if err != nil {
-		return fmt.Errorf("failed to create linux audit dir reader for '%s' - %w",
-			auditLogDirPath, err)
+		panic(err)
 	}
-
-	h.AddReadiness()
-	go func() {
-		<-logDirReader.InitFilesDone()
-		h.OnReady()
+	// close fo on exit and check for its returned error
+	defer func() {
+		if err := fo.Close(); err != nil {
+			panic(err)
+		}
 	}()
 
-	eg.Go(func() error {
-		err := logDirReader.Wait()
-		if logger.Level() == zap.DebugLevel {
-			logger.Debugf("linux audit log dir reader worker exited (%v)", err)
-		}
-		return err
-	})
-
-	lastReadJournalTS := lastReadJournalTimeStamp()
-	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
-	logins := make(chan common.RemoteUserLogin)
+	eventWriter := auditevent.NewDefaultAuditEventWriter(fo)
 
 	logger.Infoln("starting workers...")
 
-	h.AddReadiness()
-	eg.Go(func() error {
-		jp := journald.Processor{
-			BootID:    bootID,
-			MachineID: mid,
-			NodeName:  nodename,
-			Distro:    distro,
-			EventW:    eventWriter,
-			Logins:    logins,
-			CurrentTS: lastReadJournalTS,
-			Health:    h,
-		}
+	var audit = make(chan string)
+	defer close(audit)
 
-		err := jp.Read(groupCtx)
-		if logger.Level() == zap.DebugLevel {
-			logger.Debugf("journald worker exited (%v)", err)
-		}
-		return err
+	eg.Go(func() error {
+		// API routes
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			var b []byte
+			b, err := ioutil.ReadAll(r.Body)
+
+			if err != nil {
+				fmt.Println("Error reading bytes")
+			}
+			logger.Info("logging new message:  %s", b)
+			w.WriteHeader(http.StatusAccepted)
+
+			// Push to channel here
+			audit <- string(b[:])
+		})
+
+		port := ":5000"
+		logger.Infof("Server is running on port: %d\n", port)
+
+		// Start server on port specified above
+		return http.ListenAndServe(port, nil)
+
 	})
 
-	h.AddReadiness()
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			After:  time.UnixMicro(int64(lastReadJournalTS)),
-			Audits: logDirReader.Lines(),
-			Logins: logins,
+			Audits: audit,
 			EventW: eventWriter,
-			Health: h,
 		}
 
 		err := ap.Read(groupCtx)
