@@ -6,3 +6,4 @@ coverage.out
 rsyslog/rsyslog
 audito-maldito
 output.txt
+rsyslog/config/rsyslog.conf

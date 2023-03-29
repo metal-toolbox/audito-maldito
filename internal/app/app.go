@@ -120,7 +120,6 @@ func Run(ctx context.Context, osArgs []string, optLoggerConfig *zap.Config) erro
 			if err != nil {
 				fmt.Println("Error reading bytes")
 			}
-			logger.Info("logging new message:  %s", b)
 			w.WriteHeader(http.StatusAccepted)
 
 			// Push to channel here
