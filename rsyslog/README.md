@@ -12,3 +12,8 @@ make
 make install
 find / -type f -name omhttp.so
 ```
+
+
+```
+go build . && make image && make rsyslog
+```

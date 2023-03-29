@@ -13,9 +13,7 @@ require (
 	golang.org/x/sync v0.1.0
 )
 
-replace (
-	github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
-)
+replace github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -24,6 +22,7 @@ require (
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

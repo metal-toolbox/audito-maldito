@@ -70,7 +70,6 @@ func (o *Auditd) Read(ctx context.Context) error {
 	// no Go routine will be listening to it. This is super
 	// unclear from the Close documentation.
 	// defer reassembler.Close()
-
 	go maintainReassemblerLoop(ctx, reassembler, reassemblerInterval)
 
 	parseAuditLogsDone := make(chan error, 1)
