@@ -129,6 +129,7 @@ func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Re
 			auditMsg, err := auparse.ParseLogLine(line)
 			if err != nil {
 				logger.Infof("failed to parse auditd log line '%s' - %s\n", line, err)
+				break
 			} else {
 				logger.Infof("parse auditd log line '%s'\n", line)
 			}

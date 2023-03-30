@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 const usage = `audito-maldito
@@ -113,6 +116,15 @@ func Run(ctx context.Context, osArgs []string, optLoggerConfig *zap.Config) erro
 
 	var audit = make(chan string)
 	defer close(audit)
+
+	//////////////////// rsyslog poc ////////////////////////////////////////
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
 	eg.Go(func() error {
 		file, err := os.OpenFile("/var/log/audit/audit-pipe", os.O_RDONLY, os.ModeNamedPipe)
 		if err != nil {
@@ -124,41 +136,53 @@ func Run(ctx context.Context, osArgs []string, optLoggerConfig *zap.Config) erro
 		buf := make([]byte, 0, 4*1024)
 
 		for {
-			n, err := r.Read(buf[:cap(buf)])
-			sp := strings.Split(string(buf[:n]), "\n")
-
-			if len(sp) > 1 {
-				logger.Infof(currentLog.String() + sp[0])
-				audit <- currentLog.String() + sp[0]
-				for _, line := range sp[1 : len(sp)-1] {
-					audit <- line
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					break
 				}
-				currentLog.Truncate(0)
-				currentLog.WriteString(sp[len(sp)-1])
+				if event.Has(fsnotify.Write) {
+					for {
 
-			} else {
-				currentLog.Write(buf[:n])
+						n, err := r.Read(buf[:cap(buf)])
+						sp := strings.Split(string(buf[:n]), "\n")
+
+						if len(sp) > 1 {
+							audit <- currentLog.String() + sp[0]
+							for _, line := range sp[1 : len(sp)-1] {
+								audit <- line
+							}
+							currentLog.Truncate(0)
+							currentLog.WriteString(sp[len(sp)-1])
+
+						} else {
+							currentLog.Write(buf[:n])
+						}
+
+						if err != nil {
+							logger.Errorln(err)
+						}
+
+						if n == 0 {
+							if err == nil {
+								break
+							}
+							if err == io.EOF {
+								break
+							}
+							log.Fatal(err)
+						}
+					}
+				}
 			}
-
-			if err != nil {
-				logger.Errorln(err)
-			}
-
-			// if n == 0 {
-			// 	if err == nil {
-			// 		time.Sleep(time.Second * 5)
-			// 		logger.Infof("Sleeping for 5. 0 bytes read")
-			// 		continue
-			// 	}
-			// 	if err == io.EOF {
-			// 		time.Sleep(time.Second * 5)
-			// 		logger.Infof("Sleeping for 5. EOF")
-			// 		continue
-			// 	}
-			// 	log.Fatal(err)
-			// }
 		}
 	})
+
+	err = watcher.Add("/var/log/audit/audit-pipe")
+	if err != nil {
+		log.Fatal(err)
+	}
+	//////////////////// rsyslog poc ////////////////////////////////////////
 
 	eg.Go(func() error {
 		// API routes
