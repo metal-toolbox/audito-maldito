@@ -58,9 +58,9 @@ func (o *Auditd) Read(ctx context.Context) error {
 
 	parseAuditLogsDone := make(chan error, 1)
 
-	// Here we set up parsing audit logs
+	// Here we set up parsing audit
 	go func() {
-		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler)
+		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler, *logger)
 	}()
 
 	tracker := newSessionTracker(o.EventW)
@@ -110,7 +110,7 @@ func maintainReassemblerLoop(ctx context.Context, reassembler *libaudit.Reassemb
 
 // parseAuditLogs parses audit log lines read from lines and pushes them
 // to reass until the provided context is marked as done.
-func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Reassembler) error {
+func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Reassembler, logger zap.SugaredLogger) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -128,11 +128,9 @@ func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Re
 
 			auditMsg, err := auparse.ParseLogLine(line)
 			if err != nil {
-				return &parseAuditLogsError{
-					message: fmt.Sprintf("failed to parse auditd log line '%s' - %s",
-						line, err),
-					inner: err,
-				}
+				logger.Infof("failed to parse auditd log line '%s' - %s\n", line, err)
+			} else {
+				logger.Infof("parse auditd log line '%s'\n", line)
 			}
 
 			reass.PushMessage(auditMsg)

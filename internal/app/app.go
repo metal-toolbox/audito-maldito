@@ -1,12 +1,16 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
@@ -105,11 +109,56 @@ func Run(ctx context.Context, osArgs []string, optLoggerConfig *zap.Config) erro
 	}()
 
 	eventWriter := auditevent.NewDefaultAuditEventWriter(fo)
-
 	logger.Infoln("starting workers...")
 
 	var audit = make(chan string)
 	defer close(audit)
+	eg.Go(func() error {
+		file, err := os.OpenFile("/var/log/audit/audit-pipe", os.O_RDONLY, os.ModeNamedPipe)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		r := bufio.NewReader(file)
+		currentLog := bytes.NewBufferString("")
+		buf := make([]byte, 0, 4*1024)
+
+		for {
+			n, err := r.Read(buf[:cap(buf)])
+			sp := strings.Split(string(buf[:n]), "\n")
+
+			if len(sp) > 1 {
+				logger.Infof(currentLog.String() + sp[0])
+				audit <- currentLog.String() + sp[0]
+				for _, line := range sp[1 : len(sp)-1] {
+					audit <- line
+				}
+				currentLog.Truncate(0)
+				currentLog.WriteString(sp[len(sp)-1])
+
+			} else {
+				currentLog.Write(buf[:n])
+			}
+
+			if err != nil {
+				logger.Errorln(err)
+			}
+
+			// if n == 0 {
+			// 	if err == nil {
+			// 		time.Sleep(time.Second * 5)
+			// 		logger.Infof("Sleeping for 5. 0 bytes read")
+			// 		continue
+			// 	}
+			// 	if err == io.EOF {
+			// 		time.Sleep(time.Second * 5)
+			// 		logger.Infof("Sleeping for 5. EOF")
+			// 		continue
+			// 	}
+			// 	log.Fatal(err)
+			// }
+		}
+	})
 
 	eg.Go(func() error {
 		// API routes
