@@ -89,6 +89,11 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 	return &rawmsg, err
 }
 
+type ProcessEntryMessage struct {
+	LogEntry string
+	PID      string
+}
+
 type ProcessEntryConfig struct {
 	Ctx       context.Context //nolint
 	Logins    chan<- common.RemoteUserLogin

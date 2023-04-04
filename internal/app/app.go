@@ -19,6 +19,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
+	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -132,27 +133,34 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	logger.Infoln("starting workers...")
 
 	if distro == util.DistroRocky {
-		// Create a tail
-		t, err := tail.TailFile(
-			"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
-		if err != nil {
-			panic(err)
-		}
+		eg.Go(func() error {
+			// Create a tail
+			t, err := tail.TailFile(
+				"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
+			if err != nil {
+				panic(err)
+			}
+			r := rocky.RockyProcessor{}
 
-		// Print the text of each received line
-		for _ = range t.Lines {
-			processors.ProcessEntry(&processors.ProcessEntryConfig{
-				Ctx:       ctx,
-				Logins:    logins,
-				LogEntry:  "",
-				NodeName:  nodename,
-				MachineID: mid,
-				When:      time.Now(),
-				Pid:       "1",
-				EventW:    eventWriter,
-			})
-		}
-
+			for line := range t.Lines {
+				pm, err := r.Process(ctx, line.Text)
+				if err != nil {
+					logger.Errorf("error processing rocky secure logs %s", err.Error())
+					continue
+				}
+				processors.ProcessEntry(&processors.ProcessEntryConfig{
+					Ctx:       ctx,
+					Logins:    logins,
+					LogEntry:  pm.LogEntry,
+					NodeName:  nodename,
+					MachineID: mid,
+					When:      time.Now(),
+					Pid:       pm.PID,
+					EventW:    eventWriter,
+				})
+			}
+			return nil
+		})
 	} else {
 		// h.AddReadiness()
 		// eg.Go(func() error {

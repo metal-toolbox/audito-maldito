@@ -1,0 +1,6 @@
+Apr  3 15:47:42 localhost sshd[3894]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=127.0.0.1  user=user
+Apr  3 15:47:44 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:47:55 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:48:02 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:48:03 localhost sshd[3894]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
+Apr  3 15:48:03 localhost sshd[3894]: PAM 2 more authentication failures; logname= uid=0 euid=0 tty=ssh ruser= rhost=127.0.0.1  user=user
