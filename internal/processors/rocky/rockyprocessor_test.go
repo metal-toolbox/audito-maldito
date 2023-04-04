@@ -19,7 +19,10 @@ func TestRockyProcess(t *testing.T) {
 	for _, line := range strings.Split(secureLogs, "\n") {
 		pm, err := r.Process(ctx, line)
 		if err != nil {
-			assert.Failf(t, "failed to process line: %s", line)
+			if err.Error() != "not sshd entry" {
+				assert.Failf(t, "failed to process line: %s", line)
+			}
+			continue
 		}
 		assert.Equal(t, pm.PID, "3894")
 		assert.Contains(t, line, pm.LogEntry)

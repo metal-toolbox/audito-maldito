@@ -14,10 +14,14 @@ type RockyProcessor struct {
 var pidRE = regexp.MustCompile(`sshd\[(?P<PROCID>\w+)\]: (?P<MSG>.+)`)
 
 func (r *RockyProcessor) Process(ctx context.Context, line string) (processors.ProcessEntryMessage, error) {
-	pidMatches := pidRE.FindStringSubmatch(line)
-	if pidMatches == nil {
-		return processors.ProcessEntryMessage{}, fmt.Errorf("no pid")
+	entryMatches := pidRE.FindStringSubmatch(line)
+	if entryMatches == nil {
+		return processors.ProcessEntryMessage{}, fmt.Errorf("not sshd entry")
 	}
 
-	return processors.ProcessEntryMessage{PID: pidMatches[1], LogEntry: pidMatches[2]}, nil
+	if len(entryMatches) < 3 {
+		return processors.ProcessEntryMessage{}, fmt.Errorf("match group less than 3")
+	}
+
+	return processors.ProcessEntryMessage{PID: entryMatches[1], LogEntry: entryMatches[2]}, nil
 }
