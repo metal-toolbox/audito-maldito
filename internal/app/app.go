@@ -18,6 +18,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
@@ -78,7 +79,8 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	logger = l.Sugar()
 
 	auditd.SetLogger(logger)
-	// journald.SetLogger(logger)
+	journald.SetLogger(logger)
+	processors.SetLogger(logger)
 
 	distro, err := util.Distro()
 	if err != nil {
@@ -162,25 +164,25 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			return nil
 		})
 	} else {
-		// h.AddReadiness()
-		// eg.Go(func() error {
-		// 	jp := journald.Processor{
-		// 		BootID:    bootID,
-		// 		MachineID: mid,
-		// 		NodeName:  nodename,
-		// 		Distro:    distro,
-		// 		EventW:    eventWriter,
-		// 		Logins:    logins,
-		// 		CurrentTS: lastReadJournalTS,
-		// 		Health:    h,
-		// 	}
+		h.AddReadiness()
+		eg.Go(func() error {
+			jp := journald.Processor{
+				BootID:    bootID,
+				MachineID: mid,
+				NodeName:  nodename,
+				Distro:    distro,
+				EventW:    eventWriter,
+				Logins:    logins,
+				CurrentTS: lastReadJournalTS,
+				Health:    h,
+			}
 
-		// 	err := jp.Read(groupCtx)
-		// 	if logger.Level().Enabled(zap.DebugLevel) {
-		// 		logger.Debugf("journald worker exited (%v)", err)
-		// 	}
-		// 	return err
-		// })
+			err := jp.Read(groupCtx)
+			if logger.Level().Enabled(zap.DebugLevel) {
+				logger.Debugf("journald worker exited (%v)", err)
+			}
+			return err
+		})
 	}
 
 	h.AddReadiness()
