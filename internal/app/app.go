@@ -18,7 +18,6 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -77,22 +76,22 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	logger = l.Sugar()
 
 	auditd.SetLogger(logger)
-	journald.SetLogger(logger)
+	// journald.SetLogger(logger)
 
 	distro, err := util.Distro()
 	if err != nil {
 		return fmt.Errorf("failed to get os distro type: %w", err)
 	}
 
-	mid, miderr := common.GetMachineID()
-	if miderr != nil {
-		return fmt.Errorf("failed to get machine id: %w", miderr)
-	}
+	// mid, miderr := common.GetMachineID()
+	// if miderr != nil {
+	// 	return fmt.Errorf("failed to get machine id: %w", miderr)
+	// }
 
-	nodename, nodenameerr := common.GetNodeName()
-	if nodenameerr != nil {
-		return fmt.Errorf("failed to get node name: %w", nodenameerr)
-	}
+	// nodename, nodenameerr := common.GetNodeName()
+	// if nodenameerr != nil {
+	// 	return fmt.Errorf("failed to get node name: %w", nodenameerr)
+	// }
 
 	if err := common.EnsureFlushDirectory(); err != nil {
 		return fmt.Errorf("failed to ensure flush directory: %w", err)
@@ -141,30 +140,29 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 		// Print the text of each received line
 		for line := range t.Lines {
-			fmt.Println(line.Text)
+			fmt.Println(line)
 		}
 
 	} else {
+		// h.AddReadiness()
+		// eg.Go(func() error {
+		// 	jp := journald.Processor{
+		// 		BootID:    bootID,
+		// 		MachineID: mid,
+		// 		NodeName:  nodename,
+		// 		Distro:    distro,
+		// 		EventW:    eventWriter,
+		// 		Logins:    logins,
+		// 		CurrentTS: lastReadJournalTS,
+		// 		Health:    h,
+		// 	}
 
-		h.AddReadiness()
-		eg.Go(func() error {
-			jp := journald.Processor{
-				BootID:    bootID,
-				MachineID: mid,
-				NodeName:  nodename,
-				Distro:    distro,
-				EventW:    eventWriter,
-				Logins:    logins,
-				CurrentTS: lastReadJournalTS,
-				Health:    h,
-			}
-
-			err := jp.Read(groupCtx)
-			if logger.Level().Enabled(zap.DebugLevel) {
-				logger.Debugf("journald worker exited (%v)", err)
-			}
-			return err
-		})
+		// 	err := jp.Read(groupCtx)
+		// 	if logger.Level().Enabled(zap.DebugLevel) {
+		// 		logger.Debugf("journald worker exited (%v)", err)
+		// 	}
+		// 	return err
+		// })
 	}
 
 	h.AddReadiness()
