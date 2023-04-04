@@ -16,7 +16,7 @@ var pidRE = regexp.MustCompile(`sshd\[(?P<PROCID>\w+)\]: (?P<MSG>.+)`)
 func (r *RockyProcessor) Process(ctx context.Context, line string) (processors.ProcessEntryMessage, error) {
 	entryMatches := pidRE.FindStringSubmatch(line)
 	if entryMatches == nil {
-		return processors.ProcessEntryMessage{}, fmt.Errorf("not sshd entry")
+		return processors.ProcessEntryMessage{}, nil
 	}
 
 	if len(entryMatches) < 3 {

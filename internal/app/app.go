@@ -144,24 +144,32 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			}
 			r := rocky.RockyProcessor{}
 
-			for line := range t.Lines {
-				pm, err := r.Process(ctx, line.Text)
-				if err != nil {
-					logger.Errorf("error processing rocky secure logs %s", err.Error())
-					continue
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case line := <-t.Lines:
+					logger.Infoln("calling process for rocky")
+					pm, err := r.Process(ctx, line.Text)
+					if err != nil {
+						logger.Errorf("error processing rocky secure logs %s", err.Error())
+						continue
+					}
+					if pm.PID != "" {
+						processors.ProcessEntry(&processors.ProcessEntryConfig{
+							Ctx:       ctx,
+							Logins:    logins,
+							LogEntry:  pm.LogEntry,
+							NodeName:  nodename,
+							MachineID: mid,
+							When:      time.Now(),
+							Pid:       pm.PID,
+							EventW:    eventWriter,
+						})
+					}
 				}
-				processors.ProcessEntry(&processors.ProcessEntryConfig{
-					Ctx:       ctx,
-					Logins:    logins,
-					LogEntry:  pm.LogEntry,
-					NodeName:  nodename,
-					MachineID: mid,
-					When:      time.Now(),
-					Pid:       pm.PID,
-					EventW:    eventWriter,
-				})
+
 			}
-			return nil
 		})
 	} else {
 		h.AddReadiness()

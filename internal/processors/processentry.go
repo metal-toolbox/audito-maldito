@@ -119,6 +119,7 @@ func ProcessEntry(config *ProcessEntryConfig) error {
 	}
 
 	if entryFunc != nil {
+		logger.Infof("log line did match predefined regex, line: %s", config.LogEntry)
 		return entryFunc(config)
 	}
 	logger.Infof("log line did not match any predefined regex, line: %s", config.LogEntry)
