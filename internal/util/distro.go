@@ -13,6 +13,7 @@ const (
 	DistroUnknown DistroType = "unknown"
 	DistroFlatcar DistroType = "flatcar"
 	DistroUbuntu  DistroType = "ubuntu"
+	DistroRocky   DistroType = "rocky"
 )
 
 type DistroType string
