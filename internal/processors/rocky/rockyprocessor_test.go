@@ -24,5 +24,4 @@ func TestRockyProcess(t *testing.T) {
 		assert.Equal(t, pm.PID, "3894")
 		assert.Contains(t, line, pm.LogEntry)
 	}
-
 }
