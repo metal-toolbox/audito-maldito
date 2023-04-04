@@ -18,6 +18,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -83,15 +84,15 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		return fmt.Errorf("failed to get os distro type: %w", err)
 	}
 
-	// mid, miderr := common.GetMachineID()
-	// if miderr != nil {
-	// 	return fmt.Errorf("failed to get machine id: %w", miderr)
-	// }
+	mid, miderr := common.GetMachineID()
+	if miderr != nil {
+		return fmt.Errorf("failed to get machine id: %w", miderr)
+	}
 
-	// nodename, nodenameerr := common.GetNodeName()
-	// if nodenameerr != nil {
-	// 	return fmt.Errorf("failed to get node name: %w", nodenameerr)
-	// }
+	nodename, nodenameerr := common.GetNodeName()
+	if nodenameerr != nil {
+		return fmt.Errorf("failed to get node name: %w", nodenameerr)
+	}
 
 	if err := common.EnsureFlushDirectory(); err != nil {
 		return fmt.Errorf("failed to ensure flush directory: %w", err)
@@ -139,8 +140,17 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		}
 
 		// Print the text of each received line
-		for line := range t.Lines {
-			fmt.Println(line)
+		for _ = range t.Lines {
+			processors.ProcessEntry(&processors.ProcessEntryConfig{
+				Ctx:       ctx,
+				Logins:    logins,
+				LogEntry:  "",
+				NodeName:  nodename,
+				MachineID: mid,
+				When:      time.Now(),
+				Pid:       "1",
+				EventW:    eventWriter,
+			})
 		}
 
 	} else {
