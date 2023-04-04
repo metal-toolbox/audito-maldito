@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
 	"github.com/nxadm/tail"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -36,7 +38,7 @@ OPTIONS
 
 var logger *zap.SugaredLogger
 
-//nolint
+// nolint
 func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
@@ -108,6 +110,23 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	if auditfileerr != nil {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
+
+	server := &http.Server{Addr: ":2112"}
+	eg.Go(func() error {
+		http.Handle("/metrics", promhttp.Handler())
+		logger.Infoln("Starting HTTP metrics server on :2112")
+		if err := server.ListenAndServe(); err != nil {
+			logger.Errorf("Failed to start HTTP metrics server: %v", err)
+			return err
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		<-groupCtx.Done()
+		logger.Infoln("Stopping HTTP metrics server")
+		return server.Shutdown(groupCtx)
+	})
 
 	logDirReader, err := dirreader.StartLogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
@@ -208,11 +227,12 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	h.AddReadiness()
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			After:  time.UnixMicro(int64(lastReadJournalTS)),
-			Audits: logDirReader.Lines(),
-			Logins: logins,
-			EventW: eventWriter,
-			Health: h,
+			After:   time.UnixMicro(int64(lastReadJournalTS)),
+			Audits:  logDirReader.Lines(),
+			Logins:  logins,
+			EventW:  eventWriter,
+			Health:  h,
+			Metrics: auditd.NewPrometheusMetricsProvider(),
 		}
 
 		err := ap.Read(groupCtx)
