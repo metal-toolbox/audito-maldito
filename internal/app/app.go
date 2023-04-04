@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
+	"github.com/nxadm/tail"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -130,25 +131,41 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	logger.Infoln("starting workers...")
 
-	h.AddReadiness()
-	eg.Go(func() error {
-		jp := journald.Processor{
-			BootID:    bootID,
-			MachineID: mid,
-			NodeName:  nodename,
-			Distro:    distro,
-			EventW:    eventWriter,
-			Logins:    logins,
-			CurrentTS: lastReadJournalTS,
-			Health:    h,
+	if distro == util.DistroRocky {
+		// Create a tail
+		t, err := tail.TailFile(
+			"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
+		if err != nil {
+			panic(err)
 		}
 
-		err := jp.Read(groupCtx)
-		if logger.Level().Enabled(zap.DebugLevel) {
-			logger.Debugf("journald worker exited (%v)", err)
+		// Print the text of each received line
+		for line := range t.Lines {
+			fmt.Println(line.Text)
 		}
-		return err
-	})
+
+	} else {
+
+		h.AddReadiness()
+		eg.Go(func() error {
+			jp := journald.Processor{
+				BootID:    bootID,
+				MachineID: mid,
+				NodeName:  nodename,
+				Distro:    distro,
+				EventW:    eventWriter,
+				Logins:    logins,
+				CurrentTS: lastReadJournalTS,
+				Health:    h,
+			}
+
+			err := jp.Read(groupCtx)
+			if logger.Level().Enabled(zap.DebugLevel) {
+				logger.Debugf("journald worker exited (%v)", err)
+			}
+			return err
+		})
+	}
 
 	h.AddReadiness()
 	eg.Go(func() error {
