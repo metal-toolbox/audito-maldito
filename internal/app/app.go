@@ -148,7 +148,10 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case line := <-t.Lines:
+				case line, isOpen := <-t.Lines:
+					if !isOpen {
+						return fmt.Errorf("/var/log/secure chan closed")
+					}
 					pm, err := r.Process(ctx, line.Text)
 					if err != nil {
 						logger.Errorf("error processing rocky secure logs %s", err.Error())
