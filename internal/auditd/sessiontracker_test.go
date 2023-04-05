@@ -188,12 +188,11 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 	assert.Equal(t, expRUL, observedLogin)
 }
 
-//nolint // Maybe the linter should read the documentation
 func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
-	defer cancelFn()
+	t.Cleanup(cancelFn)
 
 	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
 		ctx:    ctx,
@@ -201,22 +200,20 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 		t:      t,
 	}))
 
-	//nolint // Maybe the linter should read the documentation
 	t.Run("EmptyString", func(t *testing.T) {
+		t.Parallel()
+
 		err := st.auditdEvent(newAucoalesceEvent(t, "", "success", time.Now()))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err, "expected no error when session ID is empty string")
 
 		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 	})
 
-	//nolint // Maybe the linter should read the documentation
 	t.Run("Unset", func(t *testing.T) {
+		t.Parallel()
+
 		err := st.auditdEvent(newAucoalesceEvent(t, "unset", "success", time.Now()))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err, "expected no error when session ID is unset")
 
 		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 	})
