@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//go:embed test_files/secure.log
+//go:embed testdata/secure.log
 var secureLogs string
 
 // testSshdPid is the pid used in our test files
