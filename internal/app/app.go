@@ -156,7 +156,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 						continue
 					}
 					if pm.PID != "" {
-						processors.ProcessEntry(&processors.ProcessEntryConfig{
+						err := processors.ProcessEntry(&processors.ProcessEntryConfig{
 							Ctx:       ctx,
 							Logins:    logins,
 							LogEntry:  pm.LogEntry,
@@ -166,6 +166,10 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 							Pid:       pm.PID,
 							EventW:    eventWriter,
 						})
+
+						if err != nil {
+							logger.Errorf("error processing rocky secure logs %s", err.Error())
+						}
 					}
 				}
 
