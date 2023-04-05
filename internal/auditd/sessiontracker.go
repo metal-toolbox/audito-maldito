@@ -16,8 +16,8 @@ import (
 // newSessionTracker returns a new instance of a sessionTracker.
 func newSessionTracker(eventWriter *auditevent.EventWriter) *sessionTracker {
 	return &sessionTracker{
-		sessIDsToUsers: make(map[string]*user),
-		pidsToRULs:     make(map[int]common.RemoteUserLogin),
+		sessIDsToUsers: common.NewGenericSyncMap[string, *user](),
+		pidsToRULs:     common.NewGenericSyncMap[int, common.RemoteUserLogin](),
 		eventWriter:    eventWriter,
 	}
 }
@@ -35,7 +35,7 @@ type sessionTracker struct {
 	//
 	// The map key is the auditd session ID and the value is
 	// the corresponding user object.
-	sessIDsToUsers map[string]*user
+	sessIDsToUsers *common.GenericSyncMap[string, *user]
 
 	// pidsToRULs caches remote user logins if an auditd
 	// session has not started. This alleviates the race
@@ -44,7 +44,7 @@ type sessionTracker struct {
 	// The map key is the PID of a process responsible
 	// for remote user logins and the value is the data
 	// associated with the remote login.
-	pidsToRULs map[int]common.RemoteUserLogin
+	pidsToRULs *common.GenericSyncMap[int, common.RemoteUserLogin]
 
 	// eventWriter is the auditevent.EventWriter to write
 	// the resulting audit event to.
@@ -68,7 +68,9 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	}
 
 	// Check if there is an auditd session for this login.
-	for asi, u := range o.sessIDsToUsers {
+	var found bool
+	var writeErr error
+	o.sessIDsToUsers.Iterate(func(asi string, u *user) bool {
 		if u.srcPID == rul.PID {
 			if debugLogger != nil {
 				debugLogger.With(
@@ -79,24 +81,38 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 					Debugln("found existing audit session for remote user login")
 			}
 
+			// We modify the user object in-place, in this section
+			// since it's thread-safe (i.e., it's a pointer).
 			u.hasRUL = true
 			u.login = rul
 
-			return u.writeAndClearCache(o.eventWriter)
+			found = true
+			writeErr = u.writeAndClearCache(o.eventWriter)
+			// stop iteration
+			return false
 		}
+
+		return true
+	})
+
+	if found {
+		// We found an audit session for this login, and the
+		// user object has been modified in-place. We can
+		// return early.
+		return writeErr
 	}
 
 	if debugLogger != nil {
 		debugLogger.Debugln("no matching audit session found")
 	}
 
-	_, hasIt := o.pidsToRULs[rul.PID]
+	_, hasIt := o.pidsToRULs.Load(rul.PID)
 	if hasIt {
 		logger.Warnf("got a remote user login with a pid that already exists in the map (%d)",
 			rul.PID)
 	}
 
-	o.pidsToRULs[rul.PID] = rul
+	o.pidsToRULs.Store(rul.PID, rul)
 
 	return nil
 }
@@ -121,7 +137,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		debugLogger.Debugln("new audit event")
 	}
 
-	u, hasSession := o.sessIDsToUsers[event.Session]
+	u, hasSession := o.sessIDsToUsers.Load(event.Session)
 	//nolint:nestif // Refactor later.
 	if hasSession {
 		// Either write the audit event to the event writer
@@ -140,7 +156,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 			// canonical end of a user session - but, there is
 			// also AUDIT_USER_END, which occurs just before.
 			if event.Type == auparse.AUDIT_CRED_DISP {
-				defer delete(o.sessIDsToUsers, event.Session)
+				defer o.sessIDsToUsers.Delete(event.Session)
 			}
 
 			err := u.writeAndClearCache(o.eventWriter)
@@ -199,17 +215,17 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 			srcPID: srcPID,
 		}
 
-		if rul, hasRUL := o.pidsToRULs[srcPID]; hasRUL {
+		if rul, hasRUL := o.pidsToRULs.Load(srcPID); hasRUL {
 			if debugLogger != nil {
 				debugLogger.Debugln("found existing remote user login for new audit session")
 			}
 
-			delete(o.pidsToRULs, srcPID)
+			o.pidsToRULs.Delete(srcPID)
 
 			u.hasRUL = true
 			u.login = rul
 
-			o.sessIDsToUsers[event.Session] = u
+			o.sessIDsToUsers.Store(event.Session, u)
 
 			err = o.eventWriter.Write(u.toAuditEvent(event))
 			if err != nil {
@@ -235,7 +251,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 	// Cache the event if the audit session does not have
 	// any associated common.RemoteUserLogin object.
 	u.cached = append(u.cached, event)
-	o.sessIDsToUsers[event.Session] = u
+	o.sessIDsToUsers.Store(event.Session, u)
 
 	return nil
 }
@@ -248,7 +264,7 @@ func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 			"before", t.String())
 	}
 
-	for id, u := range o.sessIDsToUsers {
+	o.sessIDsToUsers.Iterate(func(id string, u *user) bool {
 		if !u.hasRUL && u.added.Before(t) {
 			if debugLogger != nil {
 				debugLogger.With(
@@ -257,9 +273,13 @@ func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 					Debugln("removing unused audit session")
 			}
 
-			delete(o.sessIDsToUsers, id)
+			// this is fine as the function is called from within
+			// the Iterate function, which is safe for concurrent
+			// access. The lock is already held.
+			o.sessIDsToUsers.DeleteUnsafe(id)
 		}
-	}
+		return true
+	})
 }
 
 func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
@@ -270,7 +290,7 @@ func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
 			"before", t.String())
 	}
 
-	for pid, userLogin := range o.pidsToRULs {
+	o.pidsToRULs.Iterate(func(pid int, userLogin common.RemoteUserLogin) bool {
 		if userLogin.Source.LoggedAt.Before(t) {
 			if debugLogger != nil {
 				debugLogger.With(
@@ -279,9 +299,10 @@ func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
 					Debugln("removing unused remote user login")
 			}
 
-			delete(o.pidsToRULs, pid)
+			o.pidsToRULs.DeleteUnsafe(pid)
 		}
-	}
+		return true
+	})
 }
 
 type user struct {

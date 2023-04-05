@@ -82,7 +82,7 @@ func TestSessionTracker_RemoteLogin_HasAuditSession(t *testing.T) {
 		t:      t,
 	}))
 
-	st.sessIDsToUsers["123"] = u
+	st.sessIDsToUsers.Store("123", u)
 
 	err := st.remoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -133,7 +133,7 @@ func TestSessionTracker_RemoteLogin_HasAuditSessionCache_WriteErr(t *testing.T) 
 
 	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
 
-	st.sessIDsToUsers["123"] = u
+	st.sessIDsToUsers.Store("123", u)
 
 	err := st.remoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -183,10 +183,12 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, expRUL, st.pidsToRULs[expRUL.PID])
+	observedLogin, found := st.pidsToRULs.Load(expRUL.PID)
+	assert.True(t, found, "expected to find remote user login in pidsToRULs")
+	assert.Equal(t, expRUL, observedLogin)
 }
 
-// nolint // Maybe the linter should read the documentation
+//nolint // Maybe the linter should read the documentation
 func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	t.Parallel()
 
@@ -206,7 +208,7 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, st.sessIDsToUsers, 0)
+		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 	})
 
 	//nolint // Maybe the linter should read the documentation
@@ -216,7 +218,7 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, st.sessIDsToUsers, 0)
+		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 	})
 }
 
@@ -253,6 +255,7 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 		t:      t,
 	}))
 
+	// Create a session with a login event.
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "999"
@@ -261,8 +264,8 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	require.NoError(t, err, "failed to write initial event")
 
 	t.Logf("We have an initial event. The session tracker should have 1 session and 0 PID")
-	require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
-	require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
+	require.Equal(t, 1, st.sessIDsToUsers.Len(), "expected 1 session")
+	require.Equal(t, 0, st.pidsToRULs.Len(), "expected 0 PID")
 
 	err = st.remoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -282,16 +285,16 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	t.Logf("We caught a remote login. " +
 		"The session tracker should have 1 session and 0 PID since there is already an audit session " +
 		"for this login")
-	require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
-	require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
+	require.Equal(t, 1, st.sessIDsToUsers.Len(), "expected 1 session")
+	require.Equal(t, 0, st.pidsToRULs.Len(), "expected 0 PID")
 
 	t.Logf("We will write %d events", numEventsToWrite)
 	for i := 0; i < numEventsToWrite-numExtraEvents; i++ {
 		err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 		require.NoError(t, err, "failed to write event")
 
-		require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
-		require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
+		require.Equal(t, 1, st.sessIDsToUsers.Len(), "expected 1 session")
+		require.Equal(t, 0, st.pidsToRULs.Len(), "expected 0 PID")
 	}
 
 	endSessionEvent := newAucoalesceEvent(t, "123", "success", time.Now())
@@ -300,8 +303,8 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	err = st.auditdEvent(endSessionEvent)
 	require.NoError(t, err, "failed to write end session event")
 
-	assert.Len(t, st.sessIDsToUsers, 0)
-	assert.Len(t, st.pidsToRULs, 0)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 0)
+	assert.Equal(t, st.pidsToRULs.Len(), 0)
 	assert.Len(t, events, numEventsToWrite)
 }
 
@@ -333,8 +336,10 @@ func TestSessionTracker_AuditdEvent_ExistingSession_NoRUL(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, st.sessIDsToUsers, 1)
-	assert.Len(t, st.sessIDsToUsers["123"].cached, numEventsToWrite)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 1)
+	cachedSess, found := st.sessIDsToUsers.Load("123")
+	assert.True(t, found)
+	assert.Len(t, cachedSess.cached, numEventsToWrite)
 }
 
 func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) {
@@ -395,7 +400,7 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 
 	// This is the only way to hit the code path we want
 	// to test.
-	u, hasIt := st.sessIDsToUsers["123"]
+	u, hasIt := st.sessIDsToUsers.Load("123")
 	if !hasIt {
 		t.Fatal("sessIDsToUsers does not contain user for audit session id")
 	}
@@ -484,7 +489,7 @@ func TestSessionTracker_AuditdEvent_CreateSession_Skip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Len(t, st.sessIDsToUsers, 0)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 }
 
 func TestSessionTracker_AuditdEvent_CreateSession_BadPID(t *testing.T) {
@@ -547,8 +552,8 @@ func TestSessionTracker_AuditdEvent_CreateSession_WithRUL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Len(t, st.pidsToRULs, 0)
-	assert.Len(t, st.sessIDsToUsers, 1)
+	assert.Equal(t, st.pidsToRULs.Len(), 0)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 1)
 }
 
 func TestSessionTracker_AuditdEvent_CreateSession_NoRUL(t *testing.T) {
@@ -580,9 +585,11 @@ func TestSessionTracker_AuditdEvent_CreateSession_NoRUL(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, st.pidsToRULs, 0)
-	assert.Len(t, st.sessIDsToUsers, 1)
-	assert.Len(t, st.sessIDsToUsers["123"].cached, numEvents)
+	assert.Equal(t, st.pidsToRULs.Len(), 0)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 1)
+	cachedsess, found := st.sessIDsToUsers.Load("123")
+	assert.True(t, found)
+	assert.Len(t, cachedsess.cached, numEvents)
 }
 
 func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
@@ -619,7 +626,7 @@ func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
 
 	st.deleteRemoteUserLoginsBefore(time.Now())
 
-	assert.Len(t, st.pidsToRULs, 0)
+	assert.Equal(t, st.pidsToRULs.Len(), 0)
 }
 
 func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
@@ -648,7 +655,7 @@ func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
 
 	st.deleteUsersWithoutLoginsBefore(time.Now())
 
-	assert.Len(t, st.sessIDsToUsers, 0)
+	assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 }
 
 func TestUser_ToAuditEvent(t *testing.T) {
