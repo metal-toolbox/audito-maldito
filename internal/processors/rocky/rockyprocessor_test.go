@@ -13,6 +13,9 @@ import (
 //go:embed test_files/secure.log
 var secureLogs string
 
+// testSshdPid is the pid used in our test files
+var testSshdPid = "3894"
+
 func TestRockyProcess(t *testing.T) {
 	r := rocky.RockyProcessor{}
 	ctx := context.Background()
@@ -29,7 +32,7 @@ func TestRockyProcess(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(t, pm.PID, "3894")
+		assert.Equal(t, pm.PID, testSshdPid)
 		assert.Contains(t, line, pm.LogEntry)
 	}
 }
