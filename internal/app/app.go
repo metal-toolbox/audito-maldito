@@ -147,7 +147,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			for {
 				select {
 				case <-ctx.Done():
-					return nil
+					return ctx.Err()
 				case line := <-t.Lines:
 					logger.Infoln("calling process for rocky")
 					pm, err := r.Process(ctx, line.Text)
