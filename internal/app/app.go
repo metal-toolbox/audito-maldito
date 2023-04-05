@@ -140,7 +140,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			t, err := tail.TailFile(
 				"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
 			if err != nil {
-				panic(err)
+				return err
 			}
 			r := rocky.RockyProcessor{}
 
