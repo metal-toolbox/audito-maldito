@@ -11,6 +11,16 @@ import (
 type RockyProcessor struct {
 }
 
+// pidRE regex matches a sshd log line extracting the procid and message into a match group
+// example log line:
+//
+//	Apr  3 15:48:03 localhost sshd[3894]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
+//
+// regex match:
+//
+//	entryMatches[0]: sshd[3894]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
+//	entryMatches[1]: 3894
+//	entryMatches[2]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
 var pidRE = regexp.MustCompile(`sshd\[(?P<PROCID>\w+)\]: (?P<MSG>.+)`)
 
 func (r *RockyProcessor) Process(ctx context.Context, line string) (processors.ProcessEntryMessage, error) {
