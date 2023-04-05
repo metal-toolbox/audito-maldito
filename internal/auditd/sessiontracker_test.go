@@ -11,6 +11,7 @@ import (
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
@@ -185,7 +186,7 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 	assert.Equal(t, expRUL, st.pidsToRULs[expRUL.PID])
 }
 
-//nolint // Maybe the linter should read the documentation
+// nolint // Maybe the linter should read the documentation
 func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	t.Parallel()
 
@@ -219,6 +220,11 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	})
 }
 
+// TestSessionTracker_AuditdEvent_ExistingSession_Ended verifies
+// that a session is removed from the session tracker when the
+// session ends. In this case, the session comes from an audit event,
+// creating a mapping in the sessIDsToUsers map; However, at no point
+// is the session added to the pidsToRULs map.
 func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	t.Parallel()
 
@@ -252,9 +258,11 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	initialEvent.Process.PID = "999"
 
 	err := st.auditdEvent(initialEvent)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to write initial event")
+
+	t.Logf("We have an initial event. The session tracker should have 1 session and 0 PID")
+	require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
+	require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
 
 	err = st.remoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -269,24 +277,28 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 		PID:        999,
 		CredUserID: "foo",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to register remote login event")
 
+	t.Logf("We caught a remote login. " +
+		"The session tracker should have 1 session and 0 PID since there is already an audit session " +
+		"for this login")
+	require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
+	require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
+
+	t.Logf("We will write %d events", numEventsToWrite)
 	for i := 0; i < numEventsToWrite-numExtraEvents; i++ {
 		err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err, "failed to write event")
+
+		require.Len(t, st.sessIDsToUsers, 1, "expected 1 session")
+		require.Len(t, st.pidsToRULs, 0, "expected 0 PID")
 	}
 
 	endSessionEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	endSessionEvent.Type = auparse.AUDIT_CRED_DISP
 
 	err = st.auditdEvent(endSessionEvent)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to write end session event")
 
 	assert.Len(t, st.sessIDsToUsers, 0)
 	assert.Len(t, st.pidsToRULs, 0)
