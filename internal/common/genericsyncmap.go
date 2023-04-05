@@ -27,6 +27,15 @@ func (m *GenericSyncMap[K, V]) Load(key K) (V, bool) {
 	return value, ok
 }
 
+// Has returns true if the key is present in the map.
+func (m *GenericSyncMap[K, V]) Has(key K) bool {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	_, ok := m.m[key]
+	return ok
+}
+
 // Store sets the value for a key.
 func (m *GenericSyncMap[K, V]) Store(key K, value V) {
 	m.mtx.Lock()
@@ -69,4 +78,19 @@ func (m *GenericSyncMap[K, V]) Iterate(cb func(key K, value V) bool) {
 			break
 		}
 	}
+}
+
+// WithLockedValueDo calls the callback with the value for the given key,
+// if it exists. The callback is called while the map is locked, so modifying
+// values in the map should be safe. Calling locking methods on the map
+// from the callback will cause a deadlock.
+func (m *GenericSyncMap[K, V]) WithLockedValueDo(key K, cb func(value V) error) error {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	if v, ok := m.m[key]; ok {
+		return cb(v)
+	}
+
+	return nil
 }
