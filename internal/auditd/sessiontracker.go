@@ -83,8 +83,7 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 
 			// We modify the user object in-place, in this section
 			// since it's thread-safe (i.e., it's a pointer).
-			u.hasRUL = true
-			u.login = rul
+			u.setRemoteUserLoginInfo(rul)
 
 			found = true
 			writeErr = u.writeAndClearCache(o.eventWriter)
@@ -128,102 +127,115 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		return nil
 	}
 
-	var debugLogger *zap.SugaredLogger
-	if logger.Level().Enabled(zap.DebugLevel) {
-		debugLogger = logger.With(
-			"auditEvent", *event,
-			"auditEventType", event.Type.String(),
-			"auditSessionID", event.Session)
-		debugLogger.Debugln("new audit event")
+	debugLogger := logger.With(
+		"auditEvent", *event,
+		"auditEventType", event.Type.String(),
+		"auditSessionID", event.Session)
+	debugLogger.Debugln("new audit event")
+
+	if o.sessIDsToUsers.Has(event.Session) {
+		return o.auditEventWithSession(event, debugLogger)
 	}
 
-	u, hasSession := o.sessIDsToUsers.Load(event.Session)
-	//nolint:nestif // Refactor later.
-	if hasSession {
-		// Either write the audit event to the event writer
-		// or cache it for later.
+	return o.auditEventWithoutSession(event, debugLogger)
+}
 
-		if debugLogger != nil {
-			debugLogger.With(
-				"auditSessionStartTime", u.added,
-				"numCachedAuditEvents", len(u.cached),
-				"hasRUL", u.hasRUL).
-				Debugln("found existing audit session for audit event")
-		}
+// auditEventWithSession handles an audit event that is associated with
+// an audit session. If the user object associated with the session
+// already has remote user login information, the event is written to the
+// audit event writer. Otherwise, the event is cached in the user object.
+//
+// Note that this is all done within a lock on the user object. So it's
+// thread-safe. However, recall the WithLockedValueDo method holds
+// the lock for the duration of the callback. So this method should
+// return quickly and shouldn't call any other locking methods on the
+// sessionTracker.
+func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLogger *zap.SugaredLogger) error {
+	return o.sessIDsToUsers.WithLockedValueDo(event.Session, func(u *user) error {
+		debugLogger.With(
+			"auditSessionStartTime", u.added,
+			"numCachedAuditEvents", len(u.cached),
+			"hasRUL", u.hasRemoteUserLoginInfo()).
+			Debugln("found existing audit session for audit event")
 
-		if u.hasRUL {
-			// It looks like AUDIT_CRED_DISP indicates the
-			// canonical end of a user session - but, there is
-			// also AUDIT_USER_END, which occurs just before.
-			if event.Type == auparse.AUDIT_CRED_DISP {
-				defer o.sessIDsToUsers.Delete(event.Session)
-			}
+		if !u.hasRemoteUserLoginInfo() {
+			debugLogger.Debugln("caching audit event")
 
-			err := u.writeAndClearCache(o.eventWriter)
-			if err != nil {
-				return &sessionTrackerError{
-					auditEventFail: true,
-					message: fmt.Sprintf("failed to write cached events for user '%s' - %s",
-						u.login.CredUserID, err),
-					inner: err,
-				}
-			}
-
-			err = o.eventWriter.Write(u.toAuditEvent(event))
-			if err != nil {
-				return &sessionTrackerError{
-					auditEventFail: true,
-					message:        err.Error(),
-					inner:          err,
-				}
-			}
+			// Cache the event if the audit session does not have
+			// any associated common.RemoteUserLogin object.
+			u.cached = append(u.cached, event)
 
 			return nil
 		}
-	} else {
-		// Create a new audit session.
 
-		if event.Type != auparse.AUDIT_LOGIN {
-			if debugLogger != nil {
-				debugLogger.Debugln("skipping creation of new audit session for audit event")
-			}
-
-			// It appears AUDIT_LOGIN indicates the
-			// canonical start of a user session.
-			// At least, it is the event type
-			// associated with a user-specific
-			// sshd process.
-			return nil
+		// It looks like AUDIT_CRED_DISP indicates the
+		// canonical end of a user session - but, there is
+		// also AUDIT_USER_END, which occurs just before.
+		if event.Type == auparse.AUDIT_CRED_DISP {
+			defer o.sessIDsToUsers.DeleteUnsafe(event.Session)
 		}
 
-		if debugLogger != nil {
-			debugLogger.Debugln("creating new audit session for audit event")
-		}
-
-		srcPID, err := strconv.Atoi(event.Process.PID)
+		err := u.writeAndClearCache(o.eventWriter)
 		if err != nil {
 			return &sessionTrackerError{
 				auditEventFail: true,
-				message: fmt.Sprintf("failed to parse audit session init event pid for session id '%s' ('%s') - %s",
-					event.Session, event.Process.PID, err),
+				message: fmt.Sprintf("failed to write cached events for user '%s' - %s",
+					u.login.CredUserID, err),
 				inner: err,
 			}
 		}
 
-		u = &user{
-			added:  time.Now(),
-			srcPID: srcPID,
+		err = o.eventWriter.Write(u.toAuditEvent(event))
+		if err != nil {
+			return &sessionTrackerError{
+				auditEventFail: true,
+				message:        err.Error(),
+				inner:          err,
+			}
 		}
 
-		if rul, hasRUL := o.pidsToRULs.Load(srcPID); hasRUL {
-			if debugLogger != nil {
-				debugLogger.Debugln("found existing remote user login for new audit session")
-			}
+		return nil
+	})
+}
 
-			o.pidsToRULs.Delete(srcPID)
+func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debugLogger *zap.SugaredLogger) error {
+	// Create a new audit session.
 
-			u.hasRUL = true
-			u.login = rul
+	if event.Type != auparse.AUDIT_LOGIN {
+		debugLogger.Debugln("skipping creation of new audit session for audit event")
+
+		// It appears AUDIT_LOGIN indicates the
+		// canonical start of a user session.
+		// At least, it is the event type
+		// associated with a user-specific
+		// sshd process.
+		return nil
+	}
+
+	debugLogger.Debugln("creating new audit session for audit event")
+
+	srcPID, err := strconv.Atoi(event.Process.PID)
+	if err != nil {
+		return &sessionTrackerError{
+			auditEventFail: true,
+			message: fmt.Sprintf("failed to parse audit session init event pid for session id '%s' ('%s') - %s",
+				event.Session, event.Process.PID, err),
+			inner: err,
+		}
+	}
+
+	u := &user{
+		added:  time.Now(),
+		srcPID: srcPID,
+	}
+
+	if o.pidsToRULs.Has(srcPID) {
+		return o.pidsToRULs.WithLockedValueDo(srcPID, func(rul common.RemoteUserLogin) error {
+			debugLogger.Debugln("found existing remote user login for new audit session")
+
+			o.pidsToRULs.DeleteUnsafe(srcPID)
+
+			u.setRemoteUserLoginInfo(rul)
 
 			o.sessIDsToUsers.Store(event.Session, u)
 
@@ -237,22 +249,17 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 			}
 
 			return nil
-		}
-
-		if debugLogger != nil {
-			debugLogger.Debugln("no existing remote user login for new audit session")
-		}
+		})
 	}
 
-	if debugLogger != nil {
-		debugLogger.Debugln("caching audit event")
-	}
+	debugLogger.Debugln("no existing remote user login for new audit session")
+	debugLogger.Debugln("caching audit event")
 
 	// Cache the event if the audit session does not have
 	// any associated common.RemoteUserLogin object.
 	u.cached = append(u.cached, event)
-	o.sessIDsToUsers.Store(event.Session, u)
 
+	o.sessIDsToUsers.Store(event.Session, u)
 	return nil
 }
 
@@ -311,6 +318,15 @@ type user struct {
 	hasRUL bool
 	login  common.RemoteUserLogin
 	cached []*aucoalesce.Event
+}
+
+func (o *user) setRemoteUserLoginInfo(login common.RemoteUserLogin) {
+	o.hasRUL = true
+	o.login = login
+}
+
+func (o *user) hasRemoteUserLoginInfo() bool {
+	return o.hasRUL
 }
 
 func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
