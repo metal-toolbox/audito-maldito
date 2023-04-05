@@ -149,7 +149,6 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 				case <-ctx.Done():
 					return ctx.Err()
 				case line := <-t.Lines:
-					logger.Infoln("calling process for rocky")
 					pm, err := r.Process(ctx, line.Text)
 					if err != nil {
 						logger.Errorf("error processing rocky secure logs %s", err.Error())
