@@ -1,4 +1,4 @@
-package auditd
+package sessiontracker
 
 import (
 	"fmt"
@@ -13,12 +13,17 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
-// newSessionTracker returns a new instance of a sessionTracker.
-func newSessionTracker(eventWriter *auditevent.EventWriter) *sessionTracker {
+// NewSessionTracker returns a new instance of a sessionTracker.
+func NewSessionTracker(eventWriter *auditevent.EventWriter, l *zap.SugaredLogger) *sessionTracker {
+	if l == nil {
+		l = zap.NewNop().Sugar()
+	}
+
 	return &sessionTracker{
 		sessIDsToUsers: common.NewGenericSyncMap[string, *user](),
 		pidsToRULs:     common.NewGenericSyncMap[int, common.RemoteUserLogin](),
 		eventWriter:    eventWriter,
+		l:              l,
 	}
 }
 
@@ -49,18 +54,21 @@ type sessionTracker struct {
 	// eventWriter is the auditevent.EventWriter to write
 	// the resulting audit event to.
 	eventWriter *auditevent.EventWriter
+
+	// l is the logger to use.
+	l *zap.SugaredLogger
 }
 
-func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
+func (o *sessionTracker) RemoteLogin(rul common.RemoteUserLogin) error {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level().Enabled(zap.DebugLevel) {
-		debugLogger = logger.With("RemoteUserLogin", rul)
+	if o.l.Level().Enabled(zap.DebugLevel) {
+		debugLogger = o.l.With("RemoteUserLogin", rul)
 		debugLogger.Debugln("new remote user login")
 	}
 
 	err := rul.Validate()
 	if err != nil {
-		return &sessionTrackerError{
+		return &SessionTrackerError{
 			remoteLoginFail: true,
 			message:         fmt.Sprintf("failed to validate remote user login - %s", err),
 			inner:           err,
@@ -107,7 +115,7 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 
 	_, hasIt := o.pidsToRULs.Load(rul.PID)
 	if hasIt {
-		logger.Warnf("got a remote user login with a pid that already exists in the map (%d)",
+		o.l.Warnf("got a remote user login with a pid that already exists in the map (%d)",
 			rul.PID)
 	}
 
@@ -116,7 +124,7 @@ func (o *sessionTracker) remoteLogin(rul common.RemoteUserLogin) error {
 	return nil
 }
 
-func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
+func (o *sessionTracker) AuditdEvent(event *aucoalesce.Event) error {
 	// TODO: Handle the "SystemAction" type (where session == "unset").
 	//  ps: "unset" is a string.
 
@@ -127,7 +135,7 @@ func (o *sessionTracker) auditdEvent(event *aucoalesce.Event) error {
 		return nil
 	}
 
-	debugLogger := logger.With(
+	debugLogger := o.l.With(
 		"auditEvent", *event,
 		"auditEventType", event.Type.String(),
 		"auditSessionID", event.Session)
@@ -177,7 +185,7 @@ func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLog
 
 		err := u.writeAndClearCache(o.eventWriter)
 		if err != nil {
-			return &sessionTrackerError{
+			return &SessionTrackerError{
 				auditEventFail: true,
 				message: fmt.Sprintf("failed to write cached events for user '%s' - %s",
 					u.login.CredUserID, err),
@@ -187,7 +195,7 @@ func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLog
 
 		err = o.eventWriter.Write(u.toAuditEvent(event))
 		if err != nil {
-			return &sessionTrackerError{
+			return &SessionTrackerError{
 				auditEventFail: true,
 				message:        err.Error(),
 				inner:          err,
@@ -216,7 +224,7 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 
 	srcPID, err := strconv.Atoi(event.Process.PID)
 	if err != nil {
-		return &sessionTrackerError{
+		return &SessionTrackerError{
 			auditEventFail: true,
 			message: fmt.Sprintf("failed to parse audit session init event pid for session id '%s' ('%s') - %s",
 				event.Session, event.Process.PID, err),
@@ -241,7 +249,7 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 
 			err = o.eventWriter.Write(u.toAuditEvent(event))
 			if err != nil {
-				return &sessionTrackerError{
+				return &SessionTrackerError{
 					auditEventFail: true,
 					message:        err.Error(),
 					inner:          err,
@@ -263,10 +271,10 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 	return nil
 }
 
-func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
+func (o *sessionTracker) DeleteUsersWithoutLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level().Enabled(zap.DebugLevel) {
-		debugLogger = logger.With(
+	if o.l.Level().Enabled(zap.DebugLevel) {
+		debugLogger = o.l.With(
 			"cacheCleanup", "deleteUsersWithoutLoginsBefore",
 			"before", t.String())
 	}
@@ -289,10 +297,10 @@ func (o *sessionTracker) deleteUsersWithoutLoginsBefore(t time.Time) {
 	})
 }
 
-func (o *sessionTracker) deleteRemoteUserLoginsBefore(t time.Time) {
+func (o *sessionTracker) DeleteRemoteUserLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
-	if logger.Level().Enabled(zap.DebugLevel) {
-		debugLogger = logger.With(
+	if o.l.Level().Enabled(zap.DebugLevel) {
+		debugLogger = o.l.With(
 			"cacheCleanup", "deleteRemoteUserLoginsBefore",
 			"before", t.String())
 	}

@@ -2,12 +2,12 @@ package common
 
 import (
 	"context"
-	"crypto/rand"
-	"math/big"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 func TestNewHealth_DefaultReadiness(t *testing.T) {
@@ -34,7 +34,7 @@ func TestHealth_WaitForReady(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(intn(t, 0, 20))
+	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
 		h.AddReadiness()
 		go h.OnReady()
@@ -56,7 +56,7 @@ func TestHealth_WaitForReadyCtxOrTimeout(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(intn(t, 0, 20))
+	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
 		h.AddReadiness()
 		go h.OnReady()
@@ -78,7 +78,7 @@ func TestHealth_WaitForReadyCtxOrTimeout_Canceled(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(intn(t, 0, 20))
+	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
 		h.AddReadiness()
 	}
@@ -92,32 +92,11 @@ func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(intn(t, 0, 20))
+	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
 		h.AddReadiness()
 	}
 
 	err := h.WaitForReadyCtxOrTimeout(context.Background(), time.Nanosecond)
 	assert.ErrorIs(t, err, errTimedOut)
-}
-
-// intn returns a random number between min and max.
-//
-//nolint:unparam // because min is always zero when this code was added.
-func intn(t *testing.T, min, max int64) int64 {
-	t.Helper()
-
-retry:
-	bigI, err := rand.Int(rand.Reader, big.NewInt(max))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	i := bigI.Int64()
-
-	if i < min {
-		goto retry
-	}
-
-	return i
 }

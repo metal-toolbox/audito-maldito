@@ -1,4 +1,4 @@
-package auditd
+package dirreader
 
 import (
 	"bufio"
@@ -15,7 +15,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
-	"go.uber.org/zap"
 )
 
 // StartLogDirReader creates and starts a LogDirReader for
@@ -254,10 +253,6 @@ func (o *rotatingFile) readWithRetry(ctx context.Context, op fsnotify.Op) error 
 	return o.boFn(func() error {
 		err := o.read(ctx, op)
 		if err != nil {
-			if logger.Level().Enabled(zap.DebugLevel) {
-				logger.Debug("read-error", err)
-			}
-
 			if errors.Is(err, context.Canceled) {
 				// Force back-off retry to exit.
 				// See backoff.Retry for details.
