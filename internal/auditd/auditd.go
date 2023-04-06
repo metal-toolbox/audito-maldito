@@ -11,6 +11,7 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
 
+	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
@@ -78,7 +79,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler)
 	}()
 
-	tracker := newSessionTracker(o.EventW)
+	tracker := sessiontracker.NewSessionTracker(o.EventW, logger)
 
 	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
@@ -92,10 +93,10 @@ func (o *Auditd) Read(ctx context.Context) error {
 		case <-staleDataTicker.C:
 			aMinuteAgo := time.Now().Add(-staleDataCleanupInterval)
 
-			tracker.deleteUsersWithoutLoginsBefore(aMinuteAgo)
-			tracker.deleteRemoteUserLoginsBefore(aMinuteAgo)
+			tracker.DeleteUsersWithoutLoginsBefore(aMinuteAgo)
+			tracker.DeleteRemoteUserLoginsBefore(aMinuteAgo)
 		case remoteLogin := <-o.Logins:
-			err = tracker.remoteLogin(remoteLogin)
+			err = tracker.RemoteLogin(remoteLogin)
 			if err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
@@ -106,7 +107,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
 			}
 
-			err = tracker.auditdEvent(result.event)
+			err = tracker.AuditdEvent(result.event)
 			if err != nil {
 				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
 					result.event.Type, result.event.Sequence, err)

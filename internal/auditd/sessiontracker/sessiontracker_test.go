@@ -1,4 +1,4 @@
-package auditd
+package sessiontracker
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 func TestNewSessionTracker(t *testing.T) {
@@ -22,11 +23,11 @@ func TestNewSessionTracker(t *testing.T) {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	assert.NotNil(t, st.eventWriter)
 	assert.NotNil(t, st.pidsToRULs)
@@ -39,13 +40,13 @@ func TestSessionTracker_RemoteLogin_ValidateErr(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
-	err := st.remoteLogin(common.RemoteUserLogin{
+	err := st.RemoteLogin(common.RemoteUserLogin{
 		Source:     nil,
 		PID:        999,
 		CredUserID: "foo",
@@ -61,7 +62,7 @@ func TestSessionTracker_RemoteLogin_HasAuditSession(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	expCache := make([]*aucoalesce.Event, intn(t, 0, 100))
+	expCache := make([]*aucoalesce.Event, testtools.Intn(t, 0, 100))
 	for i := range expCache {
 		expCache[i] = newAucoalesceEvent(t, "123", "success", time.Now())
 	}
@@ -76,15 +77,15 @@ func TestSessionTracker_RemoteLogin_HasAuditSession(t *testing.T) {
 
 	events := make(chan *auditevent.AuditEvent, len(expCache))
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
+	}), nil)
 
 	st.sessIDsToUsers.Store("123", u)
 
-	err := st.remoteLogin(common.RemoteUserLogin{
+	err := st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -124,18 +125,18 @@ func TestSessionTracker_RemoteLogin_HasAuditSessionCache_WriteErr(t *testing.T) 
 
 	expErr := errors.New("write error")
 
-	eventEncoder := &testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-		err:    expErr,
+	eventEncoder := &testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+		Err:    expErr,
 	}
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(eventEncoder), nil)
 
 	st.sessIDsToUsers.Store("123", u)
 
-	err := st.remoteLogin(common.RemoteUserLogin{
+	err := st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -158,11 +159,11 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	expRUL := common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
@@ -178,7 +179,7 @@ func TestSessionTracker_RemoteLogin_DoesNotHaveAuditSessionCache(t *testing.T) {
 		CredUserID: "foo",
 	}
 
-	err := st.remoteLogin(expRUL)
+	err := st.RemoteLogin(expRUL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,16 +195,16 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	t.Cleanup(cancelFn)
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	t.Run("EmptyString", func(t *testing.T) {
 		t.Parallel()
 
-		err := st.auditdEvent(newAucoalesceEvent(t, "", "success", time.Now()))
+		err := st.AuditdEvent(newAucoalesceEvent(t, "", "success", time.Now()))
 		require.NoError(t, err, "expected no error when session ID is empty string")
 
 		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
@@ -212,7 +213,7 @@ func TestSessionTracker_AuditdEvent_NoSessionID(t *testing.T) {
 	t.Run("Unset", func(t *testing.T) {
 		t.Parallel()
 
-		err := st.auditdEvent(newAucoalesceEvent(t, "unset", "success", time.Now()))
+		err := st.AuditdEvent(newAucoalesceEvent(t, "unset", "success", time.Now()))
 		require.NoError(t, err, "expected no error when session ID is unset")
 
 		assert.Equal(t, st.sessIDsToUsers.Len(), 0)
@@ -243,28 +244,28 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	//
 	// As a result, the code contained in the loop will not execute.
 	numExtraEvents := 2
-	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
+	numEventsToWrite := int(testtools.Intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
+	}), nil)
 
 	// Create a session with a login event.
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "999"
 
-	err := st.auditdEvent(initialEvent)
+	err := st.AuditdEvent(initialEvent)
 	require.NoError(t, err, "failed to write initial event")
 
 	t.Logf("We have an initial event. The session tracker should have 1 session and 0 PID")
 	require.Equal(t, 1, st.sessIDsToUsers.Len(), "expected 1 session")
 	require.Equal(t, 0, st.pidsToRULs.Len(), "expected 0 PID")
 
-	err = st.remoteLogin(common.RemoteUserLogin{
+	err = st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -287,7 +288,7 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 
 	t.Logf("We will write %d events", numEventsToWrite)
 	for i := 0; i < numEventsToWrite-numExtraEvents; i++ {
-		err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
+		err = st.AuditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 		require.NoError(t, err, "failed to write event")
 
 		require.Equal(t, 1, st.sessIDsToUsers.Len(), "expected 1 session")
@@ -297,7 +298,7 @@ func TestSessionTracker_AuditdEvent_ExistingSession_Ended(t *testing.T) {
 	endSessionEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	endSessionEvent.Type = auparse.AUDIT_CRED_DISP
 
-	err = st.auditdEvent(endSessionEvent)
+	err = st.AuditdEvent(endSessionEvent)
 	require.NoError(t, err, "failed to write end session event")
 
 	assert.Equal(t, st.sessIDsToUsers.Len(), 0)
@@ -311,13 +312,13 @@ func TestSessionTracker_AuditdEvent_ExistingSession_NoRUL(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	numEventsToWrite := int(intn(t, 1, 100))
+	numEventsToWrite := int(testtools.Intn(t, 1, 100))
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	for i := 0; i < numEventsToWrite; i++ {
 		event := newAucoalesceEvent(t, "123", "success", time.Now())
@@ -327,7 +328,7 @@ func TestSessionTracker_AuditdEvent_ExistingSession_NoRUL(t *testing.T) {
 			event.Process.PID = "999"
 		}
 
-		err := st.auditdEvent(event)
+		err := st.AuditdEvent(event)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -358,27 +359,27 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 	//
 	// As a result, the code contained in the loop will not execute.
 	numExtraEvents := 1
-	numEventsToWrite := int(intn(t, int64(numExtraEvents+1), 100))
+	numEventsToWrite := int(testtools.Intn(t, int64(numExtraEvents+1), 100))
 	events := make(chan *auditevent.AuditEvent, numEventsToWrite+numExtraEvents)
 
-	eventEncoder := &testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
+	eventEncoder := &testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
 	}
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(eventEncoder), nil)
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "999"
 
-	err := st.auditdEvent(initialEvent)
+	err := st.AuditdEvent(initialEvent)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = st.remoteLogin(common.RemoteUserLogin{
+	err = st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -408,9 +409,9 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteCacheErr(t *testing.T) 
 
 	expErr := errors.New("write error")
 
-	eventEncoder.err = expErr
+	eventEncoder.Err = expErr
 
-	err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
+	err = st.AuditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 
 	assert.ErrorIs(t, err, expErr)
 }
@@ -423,24 +424,24 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteErr(t *testing.T) {
 
 	events := make(chan *auditevent.AuditEvent, 1)
 
-	eventEncoder := &testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
+	eventEncoder := &testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
 	}
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(eventEncoder))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(eventEncoder), nil)
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "999"
 
-	err := st.auditdEvent(initialEvent)
+	err := st.AuditdEvent(initialEvent)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = st.remoteLogin(common.RemoteUserLogin{
+	err = st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -458,9 +459,9 @@ func TestSessionTracker_AuditdEvent_ExistingSession_WriteErr(t *testing.T) {
 	}
 
 	expErr := errors.New("write error")
-	eventEncoder.err = expErr
+	eventEncoder.Err = expErr
 
-	err = st.auditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
+	err = st.AuditdEvent(newAucoalesceEvent(t, "123", "success", time.Now()))
 
 	assert.ErrorIs(t, err, expErr)
 }
@@ -471,17 +472,17 @@ func TestSessionTracker_AuditdEvent_CreateSession_Skip(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_ANOM_CRYPTO_FAIL
 	initialEvent.Process.PID = "999"
 
-	err := st.auditdEvent(initialEvent)
+	err := st.AuditdEvent(initialEvent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,17 +496,17 @@ func TestSessionTracker_AuditdEvent_CreateSession_BadPID(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+	}), nil)
 
 	initialEvent := newAucoalesceEvent(t, "123", "success", time.Now())
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "NaN"
 
-	err := st.auditdEvent(initialEvent)
+	err := st.AuditdEvent(initialEvent)
 
 	var exp *strconv.NumError
 	assert.ErrorAs(t, err, &exp)
@@ -517,13 +518,13 @@ func TestSessionTracker_AuditdEvent_CreateSession_WithRUL(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent, 1),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent, 1),
+		T:      t,
+	}), nil)
 
-	err := st.remoteLogin(common.RemoteUserLogin{
+	err := st.RemoteLogin(common.RemoteUserLogin{
 		Source: &auditevent.AuditEvent{
 			Subjects: map[string]string{
 				"some key": "some value",
@@ -544,7 +545,7 @@ func TestSessionTracker_AuditdEvent_CreateSession_WithRUL(t *testing.T) {
 	initialEvent.Type = auparse.AUDIT_LOGIN
 	initialEvent.Process.PID = "999"
 
-	err = st.auditdEvent(initialEvent)
+	err = st.AuditdEvent(initialEvent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -559,14 +560,14 @@ func TestSessionTracker_AuditdEvent_CreateSession_NoRUL(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	numEvents := int(intn(t, 1, 100))
+	numEvents := int(testtools.Intn(t, 1, 100))
 	events := make(chan *auditevent.AuditEvent, numEvents)
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
+	}), nil)
 
 	for i := 0; i < numEvents; i++ {
 		event := newAucoalesceEvent(t, "123", "success", time.Now())
@@ -576,7 +577,7 @@ func TestSessionTracker_AuditdEvent_CreateSession_NoRUL(t *testing.T) {
 			event.Type = auparse.AUDIT_LOGIN
 		}
 
-		err := st.auditdEvent(event)
+		err := st.AuditdEvent(event)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -595,14 +596,14 @@ func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent, 1),
-		t:      t,
-	}))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent, 1),
+		T:      t,
+	}), nil)
 
-	for i := 0; i < int(intn(t, 1, 100)); i++ {
-		err := st.remoteLogin(common.RemoteUserLogin{
+	for i := 0; i < int(testtools.Intn(t, 1, 100)); i++ {
+		err := st.RemoteLogin(common.RemoteUserLogin{
 			Source: &auditevent.AuditEvent{
 				LoggedAt: time.Now().Add(-time.Minute),
 				Subjects: map[string]string{
@@ -613,7 +614,7 @@ func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
 					Value: "127.0.0.1",
 				},
 			},
-			PID:        int(intn(t, 2, 65535)),
+			PID:        int(testtools.Intn(t, 2, 65535)),
 			CredUserID: "foo",
 		})
 		if err != nil {
@@ -621,7 +622,7 @@ func TestSessionTracker_DeleteRemoteUserLoginsBefore(t *testing.T) {
 		}
 	}
 
-	st.deleteRemoteUserLoginsBefore(time.Now())
+	st.DeleteRemoteUserLoginsBefore(time.Now())
 
 	assert.Equal(t, st.pidsToRULs.Len(), 0)
 }
@@ -632,25 +633,25 @@ func TestSessionTracker_DeleteUsersWithoutLoginsBefore(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	numSessions := int(intn(t, 1, 100))
-	st := newSessionTracker(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent, numSessions),
-		t:      t,
-	}))
+	numSessions := int(testtools.Intn(t, 1, 100))
+	st := NewSessionTracker(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent, numSessions),
+		T:      t,
+	}), nil)
 
 	for i := 0; i < numSessions; i++ {
 		event := newAucoalesceEvent(t, "123", "success", time.Now().Add(-time.Minute))
 		event.Type = auparse.AUDIT_LOGIN
-		event.Process.PID = strconv.Itoa(int(intn(t, 2, 65535)))
+		event.Process.PID = strconv.Itoa(int(testtools.Intn(t, 2, 65535)))
 
-		err := st.auditdEvent(event)
+		err := st.AuditdEvent(event)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	st.deleteUsersWithoutLoginsBefore(time.Now())
+	st.DeleteUsersWithoutLoginsBefore(time.Now())
 
 	assert.Equal(t, st.sessIDsToUsers.Len(), 0)
 }
@@ -775,7 +776,7 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 				},
 			},
 		},
-		cached: make([]*aucoalesce.Event, intn(t, 1, 100)),
+		cached: make([]*aucoalesce.Event, testtools.Intn(t, 1, 100)),
 	}
 
 	for i := range u.cached {
@@ -786,10 +787,10 @@ func TestUser_WriteAndClearCache(t *testing.T) {
 
 	events := make(chan *auditevent.AuditEvent, numEvents)
 
-	err := u.writeAndClearCache(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: events,
-		t:      t,
+	err := u.writeAndClearCache(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: events,
+		T:      t,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -821,7 +822,7 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 				},
 			},
 		},
-		cached: make([]*aucoalesce.Event, intn(t, 1, 100)),
+		cached: make([]*aucoalesce.Event, testtools.Intn(t, 1, 100)),
 	}
 
 	for i := range u.cached {
@@ -832,11 +833,11 @@ func TestUser_WriteAndClearCache_WriteErr(t *testing.T) {
 
 	expErr := errors.New("write error")
 
-	err := u.writeAndClearCache(auditevent.NewAuditEventWriter(&testAuditEncoder{
-		ctx:    ctx,
-		events: make(chan *auditevent.AuditEvent),
-		t:      t,
-		err:    expErr,
+	err := u.writeAndClearCache(auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+		Ctx:    ctx,
+		Events: make(chan *auditevent.AuditEvent),
+		T:      t,
+		Err:    expErr,
 	}))
 
 	assert.ErrorIs(t, err, expErr)
@@ -852,13 +853,13 @@ func newAucoalesceEvent(t *testing.T, sessionID, outcome string, timestamp time.
 		Session:   sessionID,
 		Timestamp: timestamp,
 		Summary: aucoalesce.Summary{
-			Action: string(randomBytes(t, 1, 64)),
+			Action: string(testtools.RandomBytes(t, 1, 64)),
 			Object: aucoalesce.Object{
-				Type:      string(randomBytes(t, 1, 16)),
-				Primary:   string(randomBytes(t, 1, 16)),
-				Secondary: string(randomBytes(t, 1, 16)),
+				Type:      string(testtools.RandomBytes(t, 1, 16)),
+				Primary:   string(testtools.RandomBytes(t, 1, 16)),
+				Secondary: string(testtools.RandomBytes(t, 1, 16)),
 			},
-			How: string(randomBytes(t, 1, 8)),
+			How: string(testtools.RandomBytes(t, 1, 8)),
 		},
 	}
 

@@ -13,7 +13,9 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 func TestAuditd_Read_RemoteLoginError(t *testing.T) {
@@ -28,10 +30,10 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 	a := Auditd{
 		Audits: make(chan string),
 		Logins: logins,
-		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
-			ctx:    ctx,
-			events: events,
-			t:      t,
+		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+			Ctx:    ctx,
+			Events: events,
+			T:      t,
 		}),
 		Health: common.NewSingleReadinessHealth(),
 	}
@@ -49,11 +51,11 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 
 	err := <-errs
 
-	var expErr *sessionTrackerError
+	var expErr *sessiontracker.SessionTrackerError
 
 	assert.ErrorAs(t, err, &expErr)
 
-	if !expErr.remoteLoginFail {
+	if !expErr.RemoteLoginFailed() {
 		t.Fatal("expected remote login fail to be true - it is false")
 	}
 }
@@ -72,10 +74,10 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
-		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
-			ctx:    ctx,
-			events: events,
-			t:      t,
+		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+			Ctx:    ctx,
+			Events: events,
+			T:      t,
 		}),
 		Health: common.NewSingleReadinessHealth(),
 	}
@@ -117,10 +119,10 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
-		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
-			ctx:    eventWCtx,
-			events: events,
-			t:      t,
+		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+			Ctx:    eventWCtx,
+			Events: events,
+			T:      t,
 		}),
 		Health: common.NewSingleReadinessHealth(),
 	}
@@ -136,11 +138,11 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 
 	err := <-errs
 
-	var expErr *sessionTrackerError
+	var expErr *sessiontracker.SessionTrackerError
 
 	assert.ErrorAs(t, err, &expErr)
 
-	if !expErr.auditEventFail {
+	if !expErr.AuditEventFailed() {
 		t.Fatal("expected audit event fail to be true - it is false")
 	}
 }

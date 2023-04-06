@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
+	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
@@ -103,7 +104,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	logDirReader, err := auditd.StartLogDirReader(groupCtx, auditLogDirPath)
+	logDirReader, err := dirreader.StartLogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
 		return fmt.Errorf("failed to create linux audit dir reader for '%s' - %w",
 			auditLogDirPath, err)

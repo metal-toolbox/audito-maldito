@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 const (
@@ -76,10 +77,10 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
-		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
-			ctx:    ctx,
-			events: events,
-			t:      t,
+		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+			Ctx:    ctx,
+			Events: events,
+			T:      t,
 		}),
 		Health: common.NewSingleReadinessHealth(),
 	}
@@ -139,10 +140,10 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
-		EventW: auditevent.NewAuditEventWriter(&testAuditEncoder{
-			ctx:    ctx,
-			events: events,
-			t:      t,
+		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
+			Ctx:    ctx,
+			Events: events,
+			T:      t,
 		}),
 		Health: common.NewSingleReadinessHealth(),
 	}
@@ -239,44 +240,6 @@ func newTestLogReader(
 			close(allowWrite)
 		})
 	}, writesDoneRet
-}
-
-// testAuditEncoder implements auditevent.EventEncoder for testing purposes.
-type testAuditEncoder struct {
-	// ctx is a context.Context that is checked before writing to
-	// the events channel.
-	//
-	//nolint
-	ctx context.Context
-
-	// events is written to when Encode is called.
-	events chan<- *auditevent.AuditEvent
-
-	// t is the current test's testing.T.
-	t *testing.T
-
-	// err is an optional error that is returned when Encode is
-	// called (only if err is non-nil).
-	err error
-}
-
-func (o testAuditEncoder) Encode(i interface{}) error {
-	if o.err != nil {
-		return o.err
-	}
-
-	event, ok := i.(*auditevent.AuditEvent)
-	if !ok {
-		o.t.Fatalf("failed to type assert event ('%T') as *auditevent.AuditEvent", i)
-	}
-
-	select {
-	case o.events <- event:
-		return nil
-	case <-o.ctx.Done():
-		return fmt.Errorf("testAuditEncoder.Encode timed-out while trying to write to events chan "+
-			"(check channel capacity | cap: %d | len: %d) - %w", cap(o.events), len(o.events), o.ctx.Err())
-	}
 }
 
 func newSshdJournaldAuditEvent(unixAccountName string, pid int) common.RemoteUserLogin {

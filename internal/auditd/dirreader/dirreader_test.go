@@ -1,15 +1,13 @@
-package auditd
+package dirreader
 
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,6 +16,8 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 func TestStartLogDirReader(t *testing.T) {
@@ -202,7 +202,7 @@ func TestLogDirReader_InitialFileSuccess(t *testing.T) {
 	defer cancelFn()
 
 	expData := bytes.NewBuffer(nil)
-	numFiles := int(intn(t, 1, 10))
+	numFiles := int(testtools.Intn(t, 1, 10))
 	initialFileNames := make([]string, numFiles)
 	tfs := &testFileSystem{
 		filePathsToFiles: make(map[string]*testFile, numFiles),
@@ -333,8 +333,8 @@ func TestRotatingFile_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < int(intn(t, 0, 100)); i++ {
-		switch intn(t, 0, 2) {
+	for i := 0; i < int(testtools.Intn(t, 0, 100)); i++ {
+		switch testtools.Intn(t, 0, 2) {
 		case 0:
 			tf.Truncate()
 
@@ -618,12 +618,12 @@ func testFileWithRandomLines(t *testing.T) *testFile {
 func randomLines(t *testing.T) []byte {
 	t.Helper()
 
-	numLines := int(intn(t, 0, 100))
+	numLines := int(testtools.Intn(t, 0, 100))
 
 	var data []byte
 
 	for i := 0; i < numLines; i++ {
-		lineBytes := randomBytes(t, 0, 400)
+		lineBytes := testtools.RandomBytes(t, 0, 400)
 		if lineBytes != nil {
 			data = append(data, hex.EncodeToString(lineBytes)...)
 		}
@@ -632,24 +632,6 @@ func randomLines(t *testing.T) []byte {
 	}
 
 	return data
-}
-
-func randomBytes(t *testing.T, min, max int64) []byte {
-	t.Helper()
-
-	numBytes := intn(t, min, max)
-
-	if numBytes == 0 {
-		return nil
-	}
-
-	b := make([]byte, numBytes)
-	_, err := rand.Read(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return b
 }
 
 // testDirEntry implements the fs.DirEntry interface.
@@ -675,25 +657,6 @@ func (o *testDirEntry) Type() fs.FileMode {
 
 func (o *testDirEntry) Info() (fs.FileInfo, error) {
 	return o.info, o.iErr
-}
-
-// intn returns a random number between min and max.
-func intn(t *testing.T, min, max int64) int64 {
-	t.Helper()
-
-retry:
-	bigI, err := rand.Int(rand.Reader, big.NewInt(max))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	i := bigI.Int64()
-
-	if i < min {
-		goto retry
-	}
-
-	return i
 }
 
 // testFSWatcher implements the fsWatcher interface.
