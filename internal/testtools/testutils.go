@@ -4,26 +4,22 @@ import (
 	"crypto/rand"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // Intn returns a random number between min and max.
-// TODO(jaosorior): This is innefficient, refactor later.
 func Intn(t *testing.T, min, max int64) int64 {
 	t.Helper()
 
-retry:
-	bigI, err := rand.Int(rand.Reader, big.NewInt(max))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Less(t, min, max, "min must be less than max")
+
+	diff := max - min
+	bigI, err := rand.Int(rand.Reader, big.NewInt(diff))
+	require.NoError(t, err, "failed to generate random number")
 
 	i := bigI.Int64()
-
-	if i < min {
-		goto retry
-	}
-
-	return i
+	return i + min
 }
 
 func RandomBytes(t *testing.T, min, max int64) []byte {
