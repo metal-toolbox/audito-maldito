@@ -206,7 +206,16 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 			// merits us panicking here.
 			return fmt.Errorf("failed to write event: %w", err)
 		}
-		return nil
+		select {
+		case <-config.ctx.Done():
+			return nil
+		case config.logins <- common.RemoteUserLogin{
+			Source:     evt,
+			PID:        pid,
+			CredUserID: common.UnknownUser,
+		}:
+			return nil
+		}
 	}
 
 	userIdx := certIDRE.SubexpIndex(idxCertUserID)
