@@ -2,6 +2,7 @@ package journald
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -125,9 +126,10 @@ func TestEntryProcessing(t *testing.T) {
 		pid      string
 	}
 	tests := []struct {
-		name string
-		args args
-		want *auditevent.AuditEvent
+		name                       string
+		args                       args
+		expectsRemoteUserLoginChan bool
+		want                       *auditevent.AuditEvent
 	}{
 		{
 			name: "Accept public key: Entry with CA and IPv4",
@@ -138,6 +140,7 @@ func TestEntryProcessing(t *testing.T) {
 				mid:      "testmid",
 				pid:      "1234",
 			},
+			expectsRemoteUserLoginChan: true,
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
 				LoggedAt: expectedts,
@@ -170,6 +173,7 @@ func TestEntryProcessing(t *testing.T) {
 				mid:      "testmid",
 				pid:      "666",
 			},
+			expectsRemoteUserLoginChan: true,
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
 				LoggedAt: expectedts,
@@ -201,6 +205,7 @@ func TestEntryProcessing(t *testing.T) {
 				mid:      "testmid",
 				pid:      "666",
 			},
+			expectsRemoteUserLoginChan: true,
 			want: &auditevent.AuditEvent{
 				Type:     common.ActionLoginIdentifier,
 				LoggedAt: expectedts,
@@ -346,9 +351,10 @@ func TestEntryProcessing(t *testing.T) {
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
 
+			logins := make(chan common.RemoteUserLogin, 1)
 			err := processEntry(&processEntryConfig{
 				ctx:       ctx,
-				logins:    make(chan common.RemoteUserLogin, 1),
+				logins:    logins,
 				logEntry:  tt.args.logentry,
 				nodeName:  tt.args.nodename,
 				machineID: tt.args.mid,
@@ -359,6 +365,16 @@ func TestEntryProcessing(t *testing.T) {
 			assert.NoError(t, err)
 
 			compareAuditLogs(t, tt.want, enc.evt)
+			if tt.expectsRemoteUserLoginChan {
+				select {
+				case login := <-logins:
+					compareAuditLogs(t, tt.want, login.Source)
+					assert.Equal(t, tt.args.pid, fmt.Sprintf("%d", login.PID))
+					assert.Equal(t, tt.want.Subjects["userID"], login.CredUserID)
+				default:
+					t.Error("expected login event to be sent to channel")
+				}
+			}
 
 			// TODO(jaosorior): Add assertions for ExtraData
 		})
