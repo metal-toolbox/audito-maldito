@@ -144,6 +144,11 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			if err != nil {
 				return err
 			}
+
+			defer func() {
+				t.Cleanup()
+			}()
+
 			r := rocky.RockyProcessor{}
 
 			for {
