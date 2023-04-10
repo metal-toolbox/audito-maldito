@@ -170,7 +170,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 						})
 
 						if err != nil {
-							logger.Errorf("error processing rocky secure logs %s", err.Error())
+							return err
 						}
 					}
 				}
