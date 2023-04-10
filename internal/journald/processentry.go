@@ -173,6 +173,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 
 	evt.LoggedAt = config.when
 
+	// RemoteUserLogin without Certificates entry
 	if len(config.logEntry) == len(matches[0]) {
 		// TODO: This log message is incorrect... but I am not sure
 		//  what this logic is trying to accomplish.
@@ -198,6 +199,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 	certIdentifierStringStart := len(matches[0]) + 1
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
+	// RemoteUserLogin with extra padding
 	if idMatches == nil {
 		logger.Infoln("b: got login entry with no matches for certificate identifiers")
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
@@ -206,7 +208,16 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 			// merits us panicking here.
 			return fmt.Errorf("failed to write event: %w", err)
 		}
-		return nil
+		select {
+		case <-config.ctx.Done():
+			return nil
+		case config.logins <- common.RemoteUserLogin{
+			Source:     evt,
+			PID:        pid,
+			CredUserID: common.UnknownUser,
+		}:
+			return nil
+		}
 	}
 
 	userIdx := certIDRE.SubexpIndex(idxCertUserID)
@@ -243,6 +254,7 @@ func processAcceptPublicKeyEntry(config *processEntryConfig) error {
 		}()
 	}
 
+	// RemoteUserLogin with CA entry
 	select {
 	case <-config.ctx.Done():
 		return nil
