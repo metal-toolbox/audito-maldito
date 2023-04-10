@@ -23,13 +23,16 @@ type RockyProcessor struct {
 //	entryMatches[2]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
 var pidRE = regexp.MustCompile(`sshd\[(?P<PROCID>\w+)\]: (?P<MSG>.+)`)
 
+// numberOfMatches should have 3 match groups.
+var numberOfMatches = 3
+
 func (r *RockyProcessor) Process(ctx context.Context, line string) (processors.ProcessEntryMessage, error) {
 	entryMatches := pidRE.FindStringSubmatch(line)
 	if entryMatches == nil {
 		return processors.ProcessEntryMessage{}, nil
 	}
 
-	if len(entryMatches) < 3 {
+	if len(entryMatches) < numberOfMatches {
 		return processors.ProcessEntryMessage{}, fmt.Errorf("match group less than 3")
 	}
 

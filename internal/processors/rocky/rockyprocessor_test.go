@@ -13,10 +13,11 @@ import (
 //go:embed testdata/secure.log
 var secureLogs string
 
-// testSshdPid is the pid used in our test files
+// testSshdPid is the pid used in our test files.
 var testSshdPid = "3894"
 
 func TestRockyProcess(t *testing.T) {
+	t.Parallel()
 	r := rocky.RockyProcessor{}
 	ctx := context.Background()
 	for _, line := range strings.Split(secureLogs, "\n") {
