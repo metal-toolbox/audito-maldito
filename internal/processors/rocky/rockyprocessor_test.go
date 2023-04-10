@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 )
 
 //go:embed testdata/secure.log
