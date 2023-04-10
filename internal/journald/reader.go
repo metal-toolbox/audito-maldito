@@ -19,8 +19,10 @@ import (
 
 // ErrNonFatal is returned when the error is not fatal
 // and processing may continue.
-var ErrNonFatal = errors.New("non-fatal error")
-var logger *zap.SugaredLogger
+var (
+	ErrNonFatal = errors.New("non-fatal error")
+	logger      *zap.SugaredLogger
+)
 
 func SetLogger(l *zap.SugaredLogger) {
 	logger = l

@@ -8,8 +8,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
 )
 
-type RockyProcessor struct {
-}
+type RockyProcessor struct{}
 
 // pidRE regex matches a sshd log line extracting the procid and message into a match group
 // example log line:

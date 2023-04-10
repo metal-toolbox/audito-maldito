@@ -175,13 +175,11 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 							Pid:       pm.PID,
 							EventW:    eventWriter,
 						})
-
 						if err != nil {
 							return err
 						}
 					}
 				}
-
 			}
 		})
 	} else {
