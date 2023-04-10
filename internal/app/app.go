@@ -136,6 +136,8 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	if distro == util.DistroRocky {
 		eg.Go(func() error {
+			defer logger.Infoln("rocky worker exited")
+
 			// Create a tail
 			t, err := tail.TailFile(
 				"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
