@@ -137,6 +137,9 @@ func getDistroSpecificMatch(distro util.DistroType) (sdjournal.Match, error) {
 		}, nil
 	case util.DistroUnknown:
 		return sdjournal.Match{}, errors.New("unknown os distro (literally)")
+	case util.DistroRocky:
+		// Should never hit this case. Here for linter.
+		return sdjournal.Match{}, fmt.Errorf("unsupported os distro: '%s'", distro)
 	default:
 		return sdjournal.Match{}, fmt.Errorf("unsupported os distro: '%s'", distro)
 	}

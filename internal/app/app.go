@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
+	"github.com/nxadm/tail"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -18,6 +19,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald"
+	"github.com/metal-toolbox/audito-maldito/internal/processors"
+	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
@@ -33,6 +36,7 @@ OPTIONS
 
 var logger *zap.SugaredLogger
 
+//nolint
 func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
@@ -77,6 +81,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	auditd.SetLogger(logger)
 	journald.SetLogger(logger)
+	processors.SetLogger(logger)
 
 	distro, err := util.Distro()
 	if err != nil {
@@ -130,25 +135,75 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 
 	logger.Infoln("starting workers...")
 
-	h.AddReadiness()
-	eg.Go(func() error {
-		jp := journald.Processor{
-			BootID:    bootID,
-			MachineID: mid,
-			NodeName:  nodename,
-			Distro:    distro,
-			EventW:    eventWriter,
-			Logins:    logins,
-			CurrentTS: lastReadJournalTS,
-			Health:    h,
-		}
+	if distro == util.DistroRocky {
+		eg.Go(func() error {
+			defer logger.Infoln("rocky worker exited")
 
-		err := jp.Read(groupCtx)
-		if logger.Level().Enabled(zap.DebugLevel) {
-			logger.Debugf("journald worker exited (%v)", err)
-		}
-		return err
-	})
+			// Create a tail
+			t, err := tail.TailFile(
+				"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				t.Cleanup()
+			}()
+
+			r := rocky.RockyProcessor{}
+
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case line, isOpen := <-t.Lines:
+					if !isOpen {
+						return fmt.Errorf("/var/log/secure chan closed")
+					}
+					pm, err := r.Process(ctx, line.Text)
+					if err != nil {
+						logger.Errorf("error processing rocky secure logs %s", err.Error())
+						continue
+					}
+					if pm.PID != "" {
+						err := processors.ProcessEntry(&processors.ProcessEntryConfig{
+							Ctx:       ctx,
+							Logins:    logins,
+							LogEntry:  pm.LogEntry,
+							NodeName:  nodename,
+							MachineID: mid,
+							When:      time.Now(),
+							Pid:       pm.PID,
+							EventW:    eventWriter,
+						})
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+		})
+	} else {
+		h.AddReadiness()
+		eg.Go(func() error {
+			jp := journald.Processor{
+				BootID:    bootID,
+				MachineID: mid,
+				NodeName:  nodename,
+				Distro:    distro,
+				EventW:    eventWriter,
+				Logins:    logins,
+				CurrentTS: lastReadJournalTS,
+				Health:    h,
+			}
+
+			err := jp.Read(groupCtx)
+			if logger.Level().Enabled(zap.DebugLevel) {
+				logger.Debugf("journald worker exited (%v)", err)
+			}
+			return err
+		})
+	}
 
 	h.AddReadiness()
 	eg.Go(func() error {

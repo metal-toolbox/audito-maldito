@@ -1,0 +1,40 @@
+Apr  3 15:46:48 localhost sudo[3819]:    user : TTY=pts/0 ; PWD=/home/user ; USER=root ; COMMAND=/sbin/rsyslogd -iNONE -n -f /home/user/rsyslog.conf
+Apr  3 15:46:48 localhost sudo[3819]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Apr  3 15:47:42 localhost unix_chkpwd[3898]: password check failed for user (user)
+Apr  3 15:47:42 localhost sshd[3894]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=127.0.0.1  user=user
+Apr  3 15:47:44 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:47:53 localhost unix_chkpwd[3920]: password check failed for user (user)
+Apr  3 15:47:55 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:48:00 localhost unix_chkpwd[3922]: password check failed for user (user)
+Apr  3 15:48:02 localhost sshd[3894]: Failed password for user from 127.0.0.1 port 41796 ssh2
+Apr  3 15:48:03 localhost sshd[3894]: Connection closed by authenticating user user 127.0.0.1 port 41796 [preauth]
+Apr  3 15:48:03 localhost sshd[3894]: PAM 2 more authentication failures; logname= uid=0 euid=0 tty=ssh ruser= rhost=127.0.0.1  user=user
+Apr  3 15:49:11 localhost sudo[3819]: pam_unix(sudo:session): session closed for user root
+Apr  3 15:49:21 localhost sudo[3936]:    user : TTY=pts/0 ; PWD=/home/user ; USER=root ; COMMAND=/sbin/rsyslogd -iNONE -n -f /home/user/rsyslog.conf
+Apr  3 15:49:21 localhost sudo[3936]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Apr  3 15:49:38 localhost unix_chkpwd[3951]: password check failed for user (user)
+Apr  3 15:50:13 localhost sudo[3936]: pam_unix(sudo:session): session closed for user root
+Apr  4 08:36:07 localhost polkitd[881]: Loading rules from directory /etc/polkit-1/rules.d
+Apr  4 08:36:07 localhost polkitd[881]: Loading rules from directory /usr/share/polkit-1/rules.d
+Apr  4 08:36:07 localhost polkitd[881]: Finished loading, compiling and executing 11 rules
+Apr  4 08:36:07 localhost polkitd[881]: Acquired the name org.freedesktop.PolicyKit1 on the system bus
+Apr  4 08:36:07 localhost useradd[1027]: failed adding user 'vboxadd', exit code: 9
+Apr  4 08:36:07 localhost useradd[1036]: failed adding user 'vboxadd', exit code: 9
+Apr  4 08:36:08 localhost systemd[1833]: pam_unix(systemd-user:session): session opened for user gdm(uid=42) by (uid=0)
+Apr  4 08:36:09 localhost gdm-launch-environment][1828]: pam_unix(gdm-launch-environment:session): session opened for user gdm(uid=42) by (uid=0)
+Apr  4 08:36:09 localhost polkitd[881]: Registered Authentication Agent for unix-session:c1 (system bus name :1.26 [/usr/bin/gnome-shell], object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8)
+Apr  4 08:36:17 localhost gdm-password][2269]: gkr-pam: unable to locate daemon control file
+Apr  4 08:36:17 localhost gdm-password][2269]: gkr-pam: stashed password to try later in open session
+Apr  4 08:36:17 localhost systemd[2284]: pam_unix(systemd-user:session): session opened for user user(uid=1000) by (uid=0)
+Apr  4 08:36:17 localhost gdm-password][2269]: pam_unix(gdm-password:session): session opened for user user(uid=1000) by (uid=0)
+Apr  4 08:36:17 localhost gdm-password][2269]: gkr-pam: gnome-keyring-daemon started properly and unlocked keyring
+Apr  4 08:36:18 localhost polkitd[881]: Registered Authentication Agent for unix-session:2 (system bus name :1.69 [/usr/bin/gnome-shell], object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8)
+Apr  4 08:36:20 localhost gdm-launch-environment][1828]: pam_unix(gdm-launch-environment:session): session closed for user gdm
+Apr  4 08:36:20 localhost polkitd[881]: Unregistered Authentication Agent for unix-session:c1 (system bus name :1.26, object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8) (disconnected from bus)
+Apr  4 08:42:40 localhost gdm-password][3542]: gkr-pam: unlocked login keyring
+Apr  4 08:43:32 localhost sudo[3615]:    user : TTY=pts/0 ; PWD=/run/systemd/journal ; USER=root ; COMMAND=/bin/setfacl -m u:1000:rwx -R .
+Apr  4 08:43:32 localhost sudo[3615]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Apr  4 08:43:32 localhost sudo[3615]: pam_unix(sudo:session): session closed for user root
+Apr  4 08:44:06 localhost sudo[3691]:    user : TTY=pts/0 ; PWD=/home/user ; USER=root ; COMMAND=/sbin/rsyslogd -n -f rsyslog.conf
+Apr  4 08:44:06 localhost sudo[3691]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Apr  4 08:44:37 localhost sudo[3691]: pam_unix(sudo:session): session  closed for user root

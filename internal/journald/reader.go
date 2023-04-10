@@ -10,14 +10,23 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
+	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
 
 // ErrNonFatal is returned when the error is not fatal
 // and processing may continue.
-var ErrNonFatal = errors.New("non-fatal error")
+var (
+	ErrNonFatal = errors.New("non-fatal error")
+	logger      *zap.SugaredLogger
+)
+
+func SetLogger(l *zap.SugaredLogger) {
+	logger = l
+}
 
 type Processor struct {
 	BootID    string
@@ -138,15 +147,15 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 	usec := entry.GetTimeStamp()
 	jp.CurrentTS = usec
 
-	err := processEntry(&processEntryConfig{
-		ctx:       ctx,
-		logins:    jp.Logins,
-		logEntry:  entryMsg,
-		nodeName:  jp.NodeName,
-		machineID: jp.MachineID,
-		when:      time.UnixMicro(int64(usec)),
-		pid:       entry.GetPID(),
-		eventW:    jp.EventW,
+	err := processors.ProcessEntry(&processors.ProcessEntryConfig{
+		Ctx:       ctx,
+		Logins:    jp.Logins,
+		LogEntry:  entryMsg,
+		NodeName:  jp.NodeName,
+		MachineID: jp.MachineID,
+		When:      time.UnixMicro(int64(usec)),
+		Pid:       entry.GetPID(),
+		EventW:    jp.EventW,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)

@@ -1,4 +1,4 @@
-package journald
+package processors
 
 import (
 	"context"
@@ -352,15 +352,15 @@ func TestEntryProcessing(t *testing.T) {
 			w := auditevent.NewAuditEventWriter(enc)
 
 			logins := make(chan common.RemoteUserLogin, 1)
-			err := processEntry(&processEntryConfig{
-				ctx:       ctx,
-				logins:    logins,
-				logEntry:  tt.args.logentry,
-				nodeName:  tt.args.nodename,
-				machineID: tt.args.mid,
-				when:      expectedts,
-				pid:       tt.args.pid,
-				eventW:    w,
+			err := ProcessEntry(&ProcessEntryConfig{
+				Ctx:       ctx,
+				Logins:    logins,
+				LogEntry:  tt.args.logentry,
+				NodeName:  tt.args.nodename,
+				MachineID: tt.args.mid,
+				When:      expectedts,
+				Pid:       tt.args.pid,
+				EventW:    w,
 			})
 			assert.NoError(t, err)
 

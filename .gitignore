@@ -3,3 +3,6 @@
 live-instance-test
 coverage.out
 .vagrant
+audito-maldito
+__debug_bin
+output.txt
