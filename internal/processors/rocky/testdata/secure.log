@@ -37,4 +37,4 @@ Apr  4 08:43:32 localhost sudo[3615]: pam_unix(sudo:session): session opened for
 Apr  4 08:43:32 localhost sudo[3615]: pam_unix(sudo:session): session closed for user root
 Apr  4 08:44:06 localhost sudo[3691]:    user : TTY=pts/0 ; PWD=/home/user ; USER=root ; COMMAND=/sbin/rsyslogd -n -f rsyslog.conf
 Apr  4 08:44:06 localhost sudo[3691]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
-Apr  4 08:44:37 localhost sudo[3691]: pam_unix(sudo:session): session closed for user root
+Apr  4 08:44:37 localhost sudo[3691]: pam_unix(sudo:session): session  closed for user root
