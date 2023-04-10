@@ -13,7 +13,8 @@ const (
 	DistroUnknown DistroType = "unknown"
 	DistroFlatcar DistroType = "flatcar"
 	DistroUbuntu  DistroType = "ubuntu"
-	DistroRocky   DistroType = "\"rocky\""
+	// Rocky os-release ID output has rocky in quotes
+	DistroRocky DistroType = "\"rocky\""
 )
 
 type DistroType string
