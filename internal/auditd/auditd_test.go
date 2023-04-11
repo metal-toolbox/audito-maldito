@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/elastic/go-libaudit/v2"
+	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
+	fakest "github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
@@ -154,13 +157,13 @@ func TestMaintainReassemblerLoop_Cancel(t *testing.T) {
 	defer cancelFn()
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: make(chan reassembleAuditdEventResult),
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	cancelFn()
 
@@ -176,13 +179,13 @@ func TestMaintainReassemblerLoop_Maintain(t *testing.T) {
 	defer cancelFn()
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: make(chan reassembleAuditdEventResult),
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	maintainReassemblerLoop(ctx, reassembler, time.Millisecond)
 }
@@ -196,13 +199,13 @@ func TestMaintainReassemblerLoop_ReasemblerClosed(t *testing.T) {
 	defer cancelFn()
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: make(chan reassembleAuditdEventResult),
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	_ = reassembler.Close()
 
@@ -215,16 +218,14 @@ func TestParseAuditLogs_Cancel(t *testing.T) {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 
-	results := make(chan reassembleAuditdEventResult, 1)
-
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	lines := make(chan string)
 
@@ -241,16 +242,14 @@ func TestParseAuditLogs_EmptyAuditLine(t *testing.T) {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 
-	results := make(chan reassembleAuditdEventResult, 1)
-
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	// An unbuffered channel is required here to ensure
 	// the parseAuditLogs receives the empty string prior
@@ -276,16 +275,14 @@ func TestParseAuditLogs_LogParseFailure(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	results := make(chan reassembleAuditdEventResult, 1)
-
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: make(chan error, 1),
+		after:  time.Time{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create reassembler")
 
 	lines := make(chan string, 1)
 	lines <- "foobar"
@@ -303,12 +300,13 @@ func TestReassemblerCB_ReassemblyComplete_Error(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 	defer cancelFn()
 
-	results := make(chan reassembleAuditdEventResult, 1)
-
+	rcbErrs := make(chan error, 1)
 	rcb := &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Time{},
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: rcbErrs,
+		after:  time.Time{},
 	}
 
 	rcb.ReassemblyComplete(nil)
@@ -316,50 +314,23 @@ func TestReassemblerCB_ReassemblyComplete_Error(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
-	case r := <-results:
+	case r := <-rcbErrs:
 		var expErr *reassemblerCBError
 
-		assert.ErrorAs(t, r.err, &expErr)
-	}
-}
-
-func TestReassemblerCB_ReassemblyComplete_CancelOnError(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-
-	results := make(chan reassembleAuditdEventResult)
-
-	rcb := &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Time{},
-	}
-
-	cancelFn()
-
-	rcb.ReassemblyComplete(nil)
-
-	select {
-	case <-results:
-		t.Fatal("results chan should be empty because context was cancelled (it is non-empty)")
-	default:
-		// Good.
+		assert.ErrorAs(t, r, &expErr)
 	}
 }
 
 func TestReassemblerCB_ReassemblyComplete_EventIsBefore(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
-	results := make(chan reassembleAuditdEventResult, 1)
-
+	rcbErrs := make(chan error, 1)
 	rcb := &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Now(),
+		au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+			return nil
+		}),
+		errors: rcbErrs,
+		after:  time.Now(),
 	}
 
 	rcb.ReassemblyComplete([]*auparse.AuditMessage{
@@ -369,43 +340,7 @@ func TestReassemblerCB_ReassemblyComplete_EventIsBefore(t *testing.T) {
 		},
 	})
 
-	select {
-	case <-results:
-		t.Fatal("results chan should be empty because event occurred after filter (it is non-empty)")
-	default:
-		// Good.
-	}
-}
-
-func TestReassemblerCB_ReassemblyComplete_CancelOnSend(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-
-	results := make(chan reassembleAuditdEventResult)
-
-	rcb := &reassemblerCB{
-		ctx:     ctx,
-		results: results,
-		after:   time.Now(),
-	}
-
-	cancelFn()
-
-	rcb.ReassemblyComplete([]*auparse.AuditMessage{
-		{
-			RecordType: auparse.AUDIT_LOGIN,
-			Timestamp:  rcb.after.Add(time.Minute),
-		},
-	})
-
-	select {
-	case <-results:
-		t.Fatal("results chan should be empty because event occurred after filter (it is non-empty)")
-	default:
-		// Good.
-	}
+	require.Empty(t, rcbErrs, "errors chan should be empty because event occurred before filter")
 }
 
 // Refer to the following GitHub issue for details:
@@ -446,12 +381,16 @@ type=PROCTITLE msg=audit(1671230063.745:657579): proctitle=2F7573722F7362696E2F6
 	for i, messageLinesSet := range cases {
 		//nolint:paralleltest // All tests being parallel results in early exit.
 		t.Run("TestCase"+strconv.Itoa(i), func(t *testing.T) {
-			results := make(chan reassembleAuditdEventResult, 1)
+			rcbErrors := make(chan error, 1)
+			called := false
 
 			reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-				ctx:     ctx,
-				results: results,
-				after:   time.Time{},
+				au: fakest.NewFakeAuditor(func(event *aucoalesce.Event) error {
+					called = true
+					return nil
+				}),
+				errors: rcbErrors,
+				after:  time.Time{},
 			})
 			if err != nil {
 				t.Fatalf("failed to create resassembler - %s", err)
@@ -485,10 +424,12 @@ type=PROCTITLE msg=audit(1671230063.745:657579): proctitle=2F7573722F7362696E2F6
 			select {
 			case <-ctx.Done():
 				t.Fatal(ctx.Err())
-			case r := <-results:
-				if r.err != nil {
-					t.Fatalf("got non-nil error for case %d - %s", i, r.err)
+			case err := <-rcbErrors:
+				if err != nil {
+					t.Fatalf("got non-nil error for case %d - %s", i, err)
 				}
+			default:
+				require.True(t, called, "reassembler callback was not called for case %d", i)
 			}
 		})
 	}
