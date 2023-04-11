@@ -1,0 +1,33 @@
+name: Rsyslog
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'rsyslog/**'
+
+jobs:
+  auto-release:
+    name: Create rsyslog Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+
+  container-rsyslog:
+    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
+    with:
+      context: "./rsyslog"
+      name: audito-maldito-rsyslog
+      tag: ${{ github.ref_name }}
+      registry_org: ${{ github.repository }}
+      dockerfile_path: ./rsyslog/Dockerfile
+      platforms: linux/amd64,linux/arm64

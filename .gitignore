@@ -6,3 +6,5 @@ coverage.out
 audito-maldito
 __debug_bin
 output.txt
+internal/integration_tests/flatcar/flatcar_production_vagrant.box.sig
+internal/integration_tests/flatcar/flatcar_production_vagrant.box

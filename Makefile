@@ -21,7 +21,7 @@ unit-test:
 .PHONY: integration-test
 integration-test:
 	@echo "Running integration tests"
-	@go test -tags int -v ./internal/integration_tests/...
+	@go test -count 1 -tags int -v ./internal/integration_tests/...
 
 .PHONY: coverage
 coverage:

@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/metal-toolbox/audito-maldito/internal/app"
+	"github.com/metal-toolbox/audito-maldito/cmd"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
@@ -25,5 +25,5 @@ func mainWithError() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return app.Run(ctx, os.Args, common.NewHealth(), nil)
+	return cmd.Run(ctx, os.Args, common.NewHealth(), nil)
 }

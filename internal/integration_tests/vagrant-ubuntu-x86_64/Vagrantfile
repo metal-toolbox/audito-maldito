@@ -3,6 +3,7 @@
 
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
+  config.ssh.insert_key = 'true'
 
   config.vm.provision "shell", inline: <<-SHELL
     set -ex
@@ -10,7 +11,10 @@ Vagrant.configure("2") do |config|
     apt install -y make gcc curl libsystemd-dev
     curl -L https://go.dev/dl/go1.19.5.linux-amd64.tar.gz | tar -C /usr/local -xzf -
     echo 'export PATH=$PATH:/usr/local/go/bin' >> "/root/.bash_profile" 
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> "/home/vagrant/.bash_profile" 
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> "/home/vagrant/.bash_profile"
+    mkfifo /var/log/audit/audit-pipe
+    mkfifo /var/log/audit/journal-pipe
+    rsyslogd -n -f /vagrant/rsyslog/config/rsyslog.confg
   SHELL
 
   #config.vm.synced_folder '.', '/vagrant', disabled: true

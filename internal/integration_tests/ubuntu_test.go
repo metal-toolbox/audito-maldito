@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metal-toolbox/audito-maldito/internal/app"
+	"github.com/metal-toolbox/audito-maldito/cmd"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
@@ -49,11 +49,6 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 	ctx, cancelFn := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelFn()
 
-	ourPrivateKeyPath := setupUbuntuComputer(t, ctx)
-
-	// Required by audito-maldito.
-	t.Setenv("NODE_NAME", "integration-test")
-
 	expectedShellPipeline := []appToRun{
 		{
 			exeName: "hexdump",
@@ -71,14 +66,22 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	checkPipelineErrs, onEventFn := newShellPipelineChecker(ctx, expectedShellPipeline)
 
-	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", onEventFn)
+	appEventsOutputFilePath := "/app-audit/app-events-output-test.log"
+	readEventsErrs := createPipeAndReadEvents(t, ctx, appEventsOutputFilePath, onEventFn)
 
 	appHealth := common.NewHealth()
-
 	appErrs := make(chan error, 1)
+
 	go func() {
-		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerConfig())
+		appErrs <- cmd.Run(ctx, []string{"audito-maldito", "--app-events-output", appEventsOutputFilePath, "--metrics", "true"}, appHealth, zapLoggerConfig())
 	}()
+
+	// let audito-maldito start
+	time.Sleep(30 * time.Second)
+	ourPrivateKeyPath := setupUbuntuComputer(t, ctx)
+
+	// Required by audito-maldito.
+	t.Setenv("NODE_NAME", "integration-test")
 
 	err := appHealth.WaitForReadyCtxOrTimeout(ctx, time.Minute)
 	if err != nil {
