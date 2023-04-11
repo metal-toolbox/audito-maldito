@@ -13,6 +13,9 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
+// Implement Auditor interface.
+var _ Auditor = &sessionTracker{}
+
 // NewSessionTracker returns a new instance of a sessionTracker.
 func NewSessionTracker(eventWriter *auditevent.EventWriter, l *zap.SugaredLogger) *sessionTracker {
 	if l == nil {

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/elastic/go-libaudit/v2"
-	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
@@ -55,12 +54,13 @@ type Auditd struct {
 // TODO: Write documentation about creating a splunk query that shows
 // only events after a user-start.
 func (o *Auditd) Read(ctx context.Context) error {
-	reassembleAuditdEvents := make(chan reassembleAuditdEventResult)
+	reassemblerErrors := make(chan error, 1)
+	tracker := sessiontracker.NewSessionTracker(o.EventW, logger)
 
 	reassembler, err := libaudit.NewReassembler(maxEventsInFlight, eventTimeout, &reassemblerCB{
-		ctx:     ctx,
-		results: reassembleAuditdEvents,
-		after:   o.After,
+		au:     tracker,
+		errors: reassemblerErrors,
+		after:  o.After,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create new auditd message resassembler - %w", err)
@@ -79,8 +79,6 @@ func (o *Auditd) Read(ctx context.Context) error {
 		parseAuditLogsDone <- parseAuditLogs(ctx, o.Audits, reassembler)
 	}()
 
-	tracker := sessiontracker.NewSessionTracker(o.EventW, logger)
-
 	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
 
@@ -96,22 +94,13 @@ func (o *Auditd) Read(ctx context.Context) error {
 			tracker.DeleteUsersWithoutLoginsBefore(aMinuteAgo)
 			tracker.DeleteRemoteUserLoginsBefore(aMinuteAgo)
 		case remoteLogin := <-o.Logins:
-			err = tracker.RemoteLogin(remoteLogin)
-			if err != nil {
+			if err := tracker.RemoteLogin(remoteLogin); err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
-		case err = <-parseAuditLogsDone:
+		case err := <-parseAuditLogsDone:
 			return fmt.Errorf("audit log parser exited unexpectedly with error - %w", err)
-		case result := <-reassembleAuditdEvents:
-			if result.err != nil {
-				return fmt.Errorf("failed to reassemble auditd event - %w", result.err)
-			}
-
-			err = tracker.AuditdEvent(result.event)
-			if err != nil {
-				return fmt.Errorf("failed to handle auditd event '%s' seq '%d' - %w",
-					result.event.Type, result.event.Sequence, err)
-			}
+		case err := <-reassemblerErrors:
+			return fmt.Errorf("failed to reassemble auditd event - %w", err)
 		}
 	}
 }
@@ -168,50 +157,4 @@ func parseAuditLogs(ctx context.Context, lines <-chan string, reass *libaudit.Re
 			reass.PushMessage(auditMsg)
 		}
 	}
-}
-
-var _ libaudit.Stream = &reassemblerCB{}
-
-// reassemblerCB implements the libaudit.Stream interface.
-type reassemblerCB struct {
-	ctx     context.Context //nolint
-	results chan<- reassembleAuditdEventResult
-	after   time.Time
-}
-
-func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
-	event, err := aucoalesce.CoalesceMessages(msgs)
-	if err != nil {
-		select {
-		case <-s.ctx.Done():
-		case s.results <- reassembleAuditdEventResult{
-			err: &reassemblerCBError{
-				message: fmt.Sprintf("failed to coalesce audit messages - %s", err),
-				inner:   err,
-			},
-		}:
-		}
-
-		return
-	}
-
-	if event.Timestamp.Before(s.after) {
-		return
-	}
-
-	aucoalesce.ResolveIDs(event)
-
-	select {
-	case <-s.ctx.Done():
-	case s.results <- reassembleAuditdEventResult{event: event}:
-	}
-}
-
-func (s *reassemblerCB) EventsLost(count int) {
-	logger.Errorf("lost %d auditd events during reassembly", count)
-}
-
-type reassembleAuditdEventResult struct {
-	event *aucoalesce.Event
-	err   error
 }
