@@ -43,6 +43,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
+	var metrics bool
 	logLevel := zapcore.DebugLevel // TODO: Switch default back to zapcore.ErrorLevel.
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
@@ -52,6 +53,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
 	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
+	flagSet.BoolVar(&metrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flagSet.PrintDefaults()
@@ -111,22 +113,24 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	server := &http.Server{Addr: ":2112"}
-	eg.Go(func() error {
-		http.Handle("/metrics", promhttp.Handler())
-		logger.Infoln("Starting HTTP metrics server on :2112")
-		if err := server.ListenAndServe(); err != nil {
-			logger.Errorf("Failed to start HTTP metrics server: %v", err)
-			return err
-		}
-		return nil
-	})
+	if metrics {
+		server := &http.Server{Addr: ":2112"}
+		eg.Go(func() error {
+			http.Handle("/metrics", promhttp.Handler())
+			logger.Infoln("Starting HTTP metrics server on :2112")
+			if err := server.ListenAndServe(); err != nil {
+				logger.Errorf("Failed to start HTTP metrics server: %v", err)
+				return err
+			}
+			return nil
+		})
 
-	eg.Go(func() error {
-		<-groupCtx.Done()
-		logger.Infoln("Stopping HTTP metrics server")
-		return server.Shutdown(groupCtx)
-	})
+		eg.Go(func() error {
+			<-groupCtx.Done()
+			logger.Infoln("Stopping HTTP metrics server")
+			return server.Shutdown(groupCtx)
+		})
+	}
 
 	logDirReader, err := dirreader.StartLogDirReader(groupCtx, auditLogDirPath)
 	if err != nil {
