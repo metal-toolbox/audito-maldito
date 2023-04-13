@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 )
 
 const (
@@ -103,6 +104,7 @@ type ProcessEntryConfig struct {
 	When      time.Time
 	Pid       string
 	EventW    *auditevent.EventWriter
+	Metrics   *metrics.PrometheusMetricsProvider
 }
 
 func ProcessEntry(config *ProcessEntryConfig) error {
@@ -140,7 +142,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 	matches := loginRE.FindStringSubmatch(config.LogEntry)
 	if matches == nil {
-		logger.Infoln("got login entry with no matches for identifiers")
+		logger.Infoln("got login entry with no regular expression matches for identifiers")
 		return nil
 	}
 
@@ -179,10 +181,13 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 
 	evt.LoggedAt = config.When
 
+	// SSHLogin
 	if len(config.LogEntry) == len(matches[0]) {
 		// TODO: This log message is incorrect... but I am not sure
 		//  what this logic is trying to accomplish.
 		logger.Infoln("a: got login entry with no matches for certificate identifiers")
+		// Increment metric even if it fails to write the event
+		config.Metrics.IncLogins(metrics.SSHKeyLogin, metrics.Success)
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.EventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
@@ -207,6 +212,9 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 	// RemoteUserLogin with extra padding
 	if idMatches == nil {
 		logger.Infoln("b: got login entry with no matches for certificate identifiers")
+
+		config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
+
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
 		if err := config.EventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
@@ -245,6 +253,8 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 		debugLogger.Debugln("writing event to auditevent writer...")
 	}
 
+	// Increment metric even if it fails to write the event
+	config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
 	if err := config.EventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
@@ -321,6 +331,8 @@ func processCertificateInvalidEntry(config *ProcessEntryConfig) error {
 		evt = evt.WithData(ed)
 	}
 
+	// Increment metric even if it fails to write the event
+	config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Failure)
 	if err := config.EventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
@@ -343,7 +355,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.LogEntry)
 	if matches == nil {
-		logger.Infoln("got login entry with no matches for not-in-allow-users")
+		logger.Infoln("got login entry with no regular expression matches for not-in-allow-users")
 		return nil
 	}
 
@@ -368,6 +380,9 @@ func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
 		"machine-id": config.MachineID,
 	})
 
+	// Increment metric even if it fails to write the event
+	config.Metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+
 	evt.LoggedAt = config.When
 	if err := config.EventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
@@ -381,7 +396,7 @@ func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
 func processInvalidUserEntry(config *ProcessEntryConfig) error {
 	matches := invalidUserRE.FindStringSubmatch(config.LogEntry)
 	if matches == nil {
-		logger.Infoln("got login entry with no matches for invalid-user")
+		logger.Infoln("got login entry with no regular expression matches for invalid-user")
 		return nil
 	}
 
@@ -409,6 +424,9 @@ func processInvalidUserEntry(config *ProcessEntryConfig) error {
 		"host":       config.NodeName,
 		"machine-id": config.MachineID,
 	})
+
+	// Increment metric even if it fails to write the event
+	config.Metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 
 	evt.LoggedAt = config.When
 	if err := config.EventW.Write(evt); err != nil {

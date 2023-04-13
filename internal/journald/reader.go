@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 )
@@ -37,6 +38,7 @@ type Processor struct {
 	Logins    chan<- common.RemoteUserLogin
 	CurrentTS uint64 // Microseconds since unix epoch.
 	Health    *common.Health
+	Metrics   *metrics.PrometheusMetricsProvider
 	jr        JournalReader
 }
 
@@ -156,6 +158,7 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 		When:      time.UnixMicro(int64(usec)),
 		Pid:       entry.GetPID(),
 		EventW:    jp.EventW,
+		Metrics:   jp.Metrics,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)

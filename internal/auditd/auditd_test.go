@@ -12,7 +12,6 @@ import (
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 	"github.com/metal-toolbox/auditevent"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,7 +30,6 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 	logins := make(chan common.RemoteUserLogin, 1)
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
-	pr := prometheus.NewRegistry()
 	a := Auditd{
 		Audits: make(chan string),
 		Logins: logins,
@@ -40,8 +38,7 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health:  common.NewSingleReadinessHealth(),
-		Metrics: NewPrometheusMetricsProviderForRegisterer(pr),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	errs := make(chan error, 1)
@@ -77,7 +74,6 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 	lines := make(chan string, 1)
 	lines <- "foobar"
 
-	pr := prometheus.NewRegistry()
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
@@ -86,8 +82,7 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health:  common.NewSingleReadinessHealth(),
-		Metrics: NewPrometheusMetricsProviderForRegisterer(pr),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	errs := make(chan error, 1)
@@ -124,7 +119,6 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 	eventWCtx, cancelEventWFn := context.WithCancel(ctx)
 	defer cancelEventWFn()
 
-	pr := prometheus.NewRegistry()
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
@@ -133,8 +127,7 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health:  common.NewSingleReadinessHealth(),
-		Metrics: NewPrometheusMetricsProviderForRegisterer(pr),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	cancelEventWFn()
