@@ -21,6 +21,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/journald"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
@@ -43,7 +44,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
-	var metrics bool
+	var enableMetrics bool
 	logLevel := zapcore.DebugLevel // TODO: Switch default back to zapcore.ErrorLevel.
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
@@ -53,7 +54,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
 	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
-	flagSet.BoolVar(&metrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
+	flagSet.BoolVar(&enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flagSet.PrintDefaults()
@@ -113,7 +114,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	if metrics {
+	if enableMetrics {
 		server := &http.Server{Addr: ":2112"}
 		eg.Go(func() error {
 			http.Handle("/metrics", promhttp.Handler())
@@ -157,6 +158,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	logins := make(chan common.RemoteUserLogin)
 
 	logger.Infoln("starting workers...")
+	pprov := metrics.NewPrometheusMetricsProvider()
 
 	if distro == util.DistroRocky {
 		eg.Go(func() error {
@@ -198,6 +200,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 							When:      time.Now(),
 							Pid:       pm.PID,
 							EventW:    eventWriter,
+							Metrics:   pprov,
 						})
 						if err != nil {
 							return err
@@ -218,6 +221,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 				Logins:    logins,
 				CurrentTS: lastReadJournalTS,
 				Health:    h,
+				Metrics:   pprov,
 			}
 
 			err := jp.Read(groupCtx)
@@ -231,12 +235,11 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	h.AddReadiness()
 	eg.Go(func() error {
 		ap := auditd.Auditd{
-			After:   time.UnixMicro(int64(lastReadJournalTS)),
-			Audits:  logDirReader.Lines(),
-			Logins:  logins,
-			EventW:  eventWriter,
-			Health:  h,
-			Metrics: auditd.NewPrometheusMetricsProvider(),
+			After:  time.UnixMicro(int64(lastReadJournalTS)),
+			Audits: logDirReader.Lines(),
+			Logins: logins,
+			EventW: eventWriter,
+			Health: h,
 		}
 
 		err := ap.Read(groupCtx)

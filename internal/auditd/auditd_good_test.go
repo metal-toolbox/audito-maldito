@@ -15,9 +15,7 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
@@ -76,7 +74,6 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	logins := make(chan common.RemoteUserLogin)
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
-	pr := prometheus.NewRegistry()
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
@@ -85,8 +82,7 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health:  common.NewSingleReadinessHealth(),
-		Metrics: NewPrometheusMetricsProviderForRegisterer(pr),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	exited := make(chan error, 1)
@@ -110,18 +106,6 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 	case err := <-writesDone:
 		if err != nil {
 			t.Fatalf("auditd writes failed - %s", err)
-		}
-	}
-
-	// Add check for prometheus remote_logins
-	gatheredMetrics, err := pr.Gather()
-	require.NoError(t, err)
-	// NOTE: This grabs all metrics from the default gatherer
-	require.Equal(t, 1, len(gatheredMetrics), "expected 1 metric registered")
-	for _, metric := range gatheredMetrics {
-		if strings.Contains(metric.GetName(), "remote_logins") {
-			m := metric.GetMetric()[0]
-			require.Equal(t, float64(1), m.GetCounter().GetValue(), "expected 1 remote login")
 		}
 	}
 
@@ -153,7 +137,6 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 	logins := make(chan common.RemoteUserLogin)
 	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
 
-	pr := prometheus.NewRegistry()
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
@@ -162,8 +145,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health:  common.NewSingleReadinessHealth(),
-		Metrics: NewPrometheusMetricsProviderForRegisterer(pr),
+		Health: common.NewSingleReadinessHealth(),
 	}
 
 	exited := make(chan error, 1)

@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 )
 
 // Refer to "go doc -all testing" for more information.
@@ -347,6 +351,7 @@ func TestEntryProcessing(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			pr := prometheus.NewRegistry()
 
 			enc := &testAuditEventEncoder{t: t}
 			w := auditevent.NewAuditEventWriter(enc)
@@ -361,6 +366,7 @@ func TestEntryProcessing(t *testing.T) {
 				When:      expectedts,
 				Pid:       tt.args.pid,
 				EventW:    w,
+				Metrics:   metrics.NewPrometheusMetricsProviderForRegisterer(pr),
 			})
 			assert.NoError(t, err)
 
@@ -371,6 +377,18 @@ func TestEntryProcessing(t *testing.T) {
 					compareAuditLogs(t, tt.want, login.Source)
 					assert.Equal(t, tt.args.pid, fmt.Sprintf("%d", login.PID))
 					assert.Equal(t, tt.want.Subjects["userID"], login.CredUserID)
+
+					// Add check for prometheus remote_logins
+					gatheredMetrics, err := pr.Gather()
+					require.NoError(t, err)
+					// NOTE: This grabs all metrics from the default gatherer
+					require.Equal(t, 1, len(gatheredMetrics), "expected 1 metric registered")
+					for _, metric := range gatheredMetrics {
+						if strings.Contains(metric.GetName(), "remote_logins") {
+							m := metric.GetMetric()[0]
+							require.Equal(t, float64(1), m.GetCounter().GetValue(), "expected 1 remote login")
+						}
+					}
 				default:
 					t.Error("expected login event to be sent to channel")
 				}

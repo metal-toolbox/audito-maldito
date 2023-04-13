@@ -49,8 +49,6 @@ type Auditd struct {
 	EventW *auditevent.EventWriter
 
 	Health *common.Health
-
-	Metrics *PrometheusMetricsProvider
 }
 
 // TODO: Write documentation about creating a splunk query that shows
@@ -96,7 +94,6 @@ func (o *Auditd) Read(ctx context.Context) error {
 			tracker.DeleteUsersWithoutLoginsBefore(aMinuteAgo)
 			tracker.DeleteRemoteUserLoginsBefore(aMinuteAgo)
 		case remoteLogin := <-o.Logins:
-			o.Metrics.IncLogins()
 			if err := tracker.RemoteLogin(remoteLogin); err != nil {
 				return fmt.Errorf("failed to handle remote user login - %w", err)
 			}
