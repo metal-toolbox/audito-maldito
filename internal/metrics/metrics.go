@@ -5,32 +5,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// LoginType is the type of login.
-type LoginType string
-
-const (
-	// SSHLogin is the login type for SSH logins.
-	SSHCertLogin LoginType = "ssh-cert"
-	// SSHKeyLogin is the login type for SSH key logins.
-	SSHKeyLogin LoginType = "ssh-key"
-	// SSHCertLogin is the login type for SSH certificate logins.
-	PasswordLogin LoginType = "password"
-	// PasswordLogin is the login type for password logins.
-	UnknownLogin LoginType = "unknown"
-)
-
-type OutcomeType string
-
-const (
-	// Success is the outcome type for successful logins.
-	Success OutcomeType = "success"
-	// Failure is the outcome type for failed logins.
-	Failure OutcomeType = "failure"
-)
-
 // PrometheusMetricsProvider is a metrics provider that uses Prometheus.
 type PrometheusMetricsProvider struct {
 	remoteLogins *prometheus.CounterVec
+	errors       *prometheus.CounterVec
 }
 
 // NewPrometheusMetricsProvider returns a new PrometheusMetricsProvider.
@@ -40,15 +18,31 @@ func NewPrometheusMetricsProvider() *PrometheusMetricsProvider {
 
 // NewPrometheusMetricsProviderForRegisterer returns a new PrometheusMetricsProvider
 // that uses the given prometheus.Registerer.
+// The following metrics are registered:
+// - remote_logins_total (counter) - The total number of remote logins.
+//   - Labels: method, outcome
+//   - For more information about the labels, see the `LoginType` and `OutcomeType`
+//
+// - errors_total (counter) - The total number of errors.
+//   - Labels: type
+//   - For more information about the labels, see the `ErrorType`
 func NewPrometheusMetricsProviderForRegisterer(r prometheus.Registerer) *PrometheusMetricsProvider {
 	p := &PrometheusMetricsProvider{
 		remoteLogins: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name:      "remote_logins_total",
-				Namespace: "audito_maldito",
+				Namespace: MetricsNamespace,
 				Help:      "The total number of remote logins.",
 			},
 			[]string{"method", "outcome"},
+		),
+		errors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name:      "errors_total",
+				Namespace: MetricsNamespace,
+				Help:      "The total number of errors.",
+			},
+			[]string{"type"},
 		),
 	}
 
@@ -60,4 +54,9 @@ func NewPrometheusMetricsProviderForRegisterer(r prometheus.Registerer) *Prometh
 // IncLogins increments the number of logins by the given type.
 func (p *PrometheusMetricsProvider) IncLogins(loginType LoginType, outcome OutcomeType) {
 	p.remoteLogins.WithLabelValues(string(loginType), string(outcome)).Inc()
+}
+
+// IncErrors increments the number of errors by the given type.
+func (p *PrometheusMetricsProvider) IncErrors(errorType ErrorType) {
+	p.errors.WithLabelValues(string(errorType)).Inc()
 }
