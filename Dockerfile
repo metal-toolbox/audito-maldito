@@ -24,4 +24,4 @@ USER 0
 
 COPY --from=builder /go/src/audito-maldito/audito-maldito /usr/bin/audito-maldito
 
-ENTRYPOINT [ "/usr/bin/audito-maldito/audito-maldito" ]
+ENTRYPOINT [ "/usr/bin/audito-maldito" ]
