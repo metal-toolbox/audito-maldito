@@ -120,6 +120,8 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 
 	if isNewFile == 0 {
 		if r := j.Wait(defaultSleep); r < 0 {
+			jp.Metrics.IncErrors(metrics.ErrorTypeJournaldWait)
+
 			flushLastRead(jp.CurrentTS)
 
 			logger.Errorf("wait failed after checking for new journal file, "+
