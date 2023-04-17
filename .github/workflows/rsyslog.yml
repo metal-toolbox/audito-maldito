@@ -52,7 +52,7 @@ jobs:
           context: "./rsyslog"
           push: true
           file: ./rsyslog/Dockerfile
-          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:{{ env.Version }}-rsyslog
+          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ env.Version }}-rsyslog
           labels: ${{ steps.meta-api.outputs.labels }}
 
       - name: Build and push Docker image
@@ -60,5 +60,5 @@ jobs:
         with:
           push: true
           file: Dockerfile
-          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:{{ env.Version}}
+          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ env.Version}}
           labels: ${{ steps.meta-api.outputs.labels }}
