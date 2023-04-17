@@ -368,7 +368,7 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 		"auditd",
 	).WithTarget(o.login.Source.Target)
 
-	//adding process args
+	// adding process args
 	evt.Metadata.Extra["process_args"] = ae.Process.Args
 
 	evt.LoggedAt = ae.Timestamp
