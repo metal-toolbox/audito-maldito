@@ -27,7 +27,7 @@ jobs:
     with:
       build_context: "./rsyslog"
       name: audito-maldito-rsyslog
-      tag: ${{ github.ref_name }}
+      tag: ubuntu22.04
       registry_org: ${{ github.repository }}
       dockerfile_path: ./rsyslog/Dockerfile
       platforms: linux/amd64,linux/arm64
