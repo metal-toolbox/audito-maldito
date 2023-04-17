@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:22.04
 RUN apt update
 RUN apt install rsyslog -y
 RUN rm -r /etc/rsyslog.d && mkdir /etc/rsyslog.d
