@@ -369,7 +369,9 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	).WithTarget(o.login.Source.Target)
 
 	// adding process args
-	evt.Metadata.Extra["process_args"] = ae.Process.Args
+	if evt.Metadata.Extra == nil {
+		evt.Metadata.Extra = make(map[string]any)
+	}
 
 	evt.LoggedAt = ae.Timestamp
 	evt.Metadata.AuditID = ae.Session
