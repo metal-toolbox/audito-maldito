@@ -16,7 +16,7 @@ rsyslog:
 	-v /etc/machine-id:/etc/machine-id:ro \
 	-v ${PWD}/config/rsyslog.conf:/etc/rsyslog.conf:ro \
 	-v ${PWD}/config/rsyslog.d:/etc/rsyslog.d \
-	 ghcr.io/metal-toolbox/audito-maldito-rsyslog:v0.0.1
+	 ghcr.io/angrieralien/audito-maldito:named-pipe-abstraction-rsyslog
 
 .PHONY: am
 am:
@@ -26,4 +26,4 @@ am:
 	-v /etc/machine-id:/etc/machine-id:ro \
 	-v /etc/os-release:/etc/os-release:ro \
 	-v /app-audit:/app-audit \
-	 ghcr.io/metal-toolbox/audito-maldito:latest
+	 ghcr.io/angrieralien/audito-maldito:named-pipe-abstraction
