@@ -25,7 +25,7 @@ jobs:
   container-rsyslog:
     uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
     with:
-      context: "./rsyslog"
+      build_context: "./rsyslog"
       name: audito-maldito-rsyslog
       tag: ${{ github.ref_name }}
       registry_org: ${{ github.repository }}
