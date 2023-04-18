@@ -175,7 +175,6 @@ linters-settings:
       - hexLiteral
       - httpNoBody
       - ifElseChain
-      - ioutilDeprecated
       - methodExprCall
       - newDeref
       - octalLiteral
