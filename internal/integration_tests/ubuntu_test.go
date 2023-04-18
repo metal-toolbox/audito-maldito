@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/audito-maldito/internal/app"
-	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
 )
 
 const (
@@ -73,14 +73,17 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", onEventFn)
 
-	appHealth := common.NewHealth()
+	appHealth := health.NewHealth()
+
+	tmoutctx, tmoutctxFn := context.WithTimeout(ctx, time.Minute)
+	defer tmoutctxFn()
 
 	appErrs := make(chan error, 1)
 	go func() {
 		appErrs <- app.Run(ctx, []string{"audito-maldito"}, appHealth, zapLoggerConfig())
 	}()
 
-	err := appHealth.WaitForReadyCtxOrTimeout(ctx, time.Minute)
+	err := <-appHealth.WaitForReady(tmoutctx)
 	if err != nil {
 		t.Fatalf("failed to wait for app to become ready - %s", err)
 	}

@@ -17,6 +17,12 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+const (
+	// DirReaderComponentName is the component name for the dir reader.
+	// This is used for health checks.
+	DirReaderComponentName = "auditlog-dirreader"
+)
+
 // StartLogDirReader creates and starts a LogDirReader for
 // the specified directory path (e.g., "/var/log/audit").
 //

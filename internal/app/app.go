@@ -20,6 +20,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd"
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
@@ -40,11 +41,12 @@ OPTIONS
 var logger *zap.SugaredLogger
 
 //nolint
-func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig *zap.Config) error {
+func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
 	var enableMetrics bool
+	var enableHealthz bool
 	logLevel := zapcore.DebugLevel // TODO: Switch default back to zapcore.ErrorLevel.
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
@@ -55,6 +57,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
 	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
 	flagSet.BoolVar(&enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
+	flagSet.BoolVar(&enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flagSet.PrintDefaults()
@@ -114,11 +117,20 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
+	server := &http.Server{Addr: ":2112"}
+
 	if enableMetrics {
-		server := &http.Server{Addr: ":2112"}
+		http.Handle("/metrics", promhttp.Handler())
+	}
+
+	if enableHealthz {
+		http.Handle("/readyz", h.ReadyzHandler())
+		// TODO: Add livez endpoint
+	}
+
+	if enableMetrics || enableHealthz {
 		eg.Go(func() error {
-			http.Handle("/metrics", promhttp.Handler())
-			logger.Infoln("Starting HTTP metrics server on :2112")
+			logger.Infoln("Starting HTTP server on :2112")
 			if err := server.ListenAndServe(); err != nil {
 				logger.Errorf("Failed to start HTTP metrics server: %v", err)
 				return err
@@ -139,10 +151,10 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			auditLogDirPath, err)
 	}
 
-	h.AddReadiness()
+	h.AddReadiness(dirreader.DirReaderComponentName)
 	go func() {
 		<-logDirReader.InitFilesDone()
-		h.OnReady()
+		h.OnReady(dirreader.DirReaderComponentName)
 	}()
 
 	eg.Go(func() error {
@@ -210,7 +222,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 			}
 		})
 	} else {
-		h.AddReadiness()
+		h.AddReadiness(journald.JournaldReaderComponentName)
 		eg.Go(func() error {
 			jp := journald.Processor{
 				BootID:    bootID,
@@ -232,7 +244,7 @@ func Run(ctx context.Context, osArgs []string, h *common.Health, optLoggerConfig
 		})
 	}
 
-	h.AddReadiness()
+	h.AddReadiness(auditd.AuditdProcessorComponentName)
 	eg.Go(func() error {
 		ap := auditd.Auditd{
 			After:  time.UnixMicro(int64(lastReadJournalTS)),

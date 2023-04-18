@@ -12,6 +12,13 @@ import (
 
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
+)
+
+const (
+	// AuditdProcessorComponentName is the name of the component
+	// that reads from auditd. This is used in the health check.
+	AuditdProcessorComponentName = "auditd-processor"
 )
 
 // libaudit variables.
@@ -48,7 +55,7 @@ type Auditd struct {
 	// EventW is the auditevent.EventWriter to write events to.
 	EventW *auditevent.EventWriter
 
-	Health *common.Health
+	Health *health.Health
 }
 
 // TODO: Write documentation about creating a splunk query that shows
@@ -82,7 +89,7 @@ func (o *Auditd) Read(ctx context.Context) error {
 	staleDataTicker := time.NewTicker(staleDataCleanupInterval)
 	defer staleDataTicker.Stop()
 
-	o.Health.OnReady()
+	o.Health.OnReady(AuditdProcessorComponentName)
 
 	for {
 		select {
