@@ -18,6 +18,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
 	fakest "github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
@@ -38,7 +39,7 @@ func TestAuditd_Read_RemoteLoginError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
+		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
 
 	errs := make(chan error, 1)
@@ -82,7 +83,7 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
+		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
 
 	errs := make(chan error, 1)
@@ -127,7 +128,7 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
+		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
 
 	cancelEventWFn()

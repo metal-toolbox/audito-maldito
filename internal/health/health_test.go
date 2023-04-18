@@ -1,4 +1,4 @@
-package common
+package health
 
 import (
 	"context"
@@ -18,11 +18,14 @@ func TestNewHealth_DefaultReadiness(t *testing.T) {
 
 	h := NewHealth()
 
+	assert.True(t, h.IsReady(), "health should be ready by default")
+
 	select {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
-	case <-h.WaitForReady():
+	case err := <-h.WaitForReady(ctx):
 		// Success.
+		assert.NoError(t, err, "wait for ready should not return an error")
 	}
 }
 
@@ -36,35 +39,19 @@ func TestHealth_WaitForReady(t *testing.T) {
 
 	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness()
-		go h.OnReady()
+		h.AddReadiness("test")
+
+		assert.False(t, h.IsReady(), "health should not be ready yet")
+
+		go h.OnReady("test")
 	}
 
 	select {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
-	case <-h.WaitForReady():
-		// Success.
-	}
-}
-
-func TestHealth_WaitForReadyCtxOrTimeout(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
-	defer cancelFn()
-
-	h := NewHealth()
-
-	numServices := int(testtools.Intn(t, 0, 20))
-	for i := 0; i < numServices; i++ {
-		h.AddReadiness()
-		go h.OnReady()
-	}
-
-	err := h.WaitForReadyCtxOrTimeout(ctx, time.Second)
-	if err != nil {
-		t.Fatal(err)
+	case err := <-h.WaitForReady(ctx):
+		assert.NoError(t, err, "wait for ready should not return an error")
+		assert.True(t, h.IsReady(), "health should be ready now")
 	}
 }
 
@@ -80,23 +67,28 @@ func TestHealth_WaitForReadyCtxOrTimeout_Canceled(t *testing.T) {
 
 	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness()
+		h.AddReadiness("test")
 	}
 
-	err := h.WaitForReadyCtxOrTimeout(ctx, time.Second)
+	err := <-h.WaitForReady(ctx)
 	assert.ErrorIs(t, err, context.Canceled)
+	assert.False(t, h.IsReady(), "health should not ready")
 }
 
 func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
 	t.Parallel()
 
+	ctx, cancelFn := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelFn()
+
 	h := NewHealth()
 
 	numServices := int(testtools.Intn(t, 0, 20))
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness()
+		h.AddReadiness("test")
 	}
 
-	err := h.WaitForReadyCtxOrTimeout(context.Background(), time.Nanosecond)
-	assert.ErrorIs(t, err, errTimedOut)
+	err := <-h.WaitForReady(ctx)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.False(t, h.IsReady(), "health should not ready")
 }

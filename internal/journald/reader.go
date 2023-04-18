@@ -13,9 +13,16 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
+)
+
+const (
+	// JournaldReaderComponentName is the name of the component
+	// that reads from journald. This is used in the health check.
+	JournaldReaderComponentName = "journald-reader"
 )
 
 // ErrNonFatal is returned when the error is not fatal
@@ -37,7 +44,7 @@ type Processor struct {
 	EventW    *auditevent.EventWriter
 	Logins    chan<- common.RemoteUserLogin
 	CurrentTS uint64 // Microseconds since unix epoch.
-	Health    *common.Health
+	Health    *health.Health
 	Metrics   *metrics.PrometheusMetricsProvider
 	jr        JournalReader
 }
@@ -74,7 +81,7 @@ func (jp *Processor) Read(ctx context.Context) error {
 		flushLastRead(jp.CurrentTS)
 	}()
 
-	jp.Health.OnReady()
+	jp.Health.OnReady(JournaldReaderComponentName)
 
 	for {
 		select {

@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
@@ -82,7 +83,7 @@ func TestAuditd_Read_GoodRemoteUserLoginFirst(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
+		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
 
 	exited := make(chan error, 1)
@@ -145,7 +146,7 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 			Events: events,
 			T:      t,
 		}),
-		Health: common.NewSingleReadinessHealth(),
+		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
 
 	exited := make(chan error, 1)
