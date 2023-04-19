@@ -235,12 +235,9 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 		}
 	}
 
-	procArgs := event.Process.Args
-
 	u := &user{
-		added:    time.Now(),
-		srcPID:   srcPID,
-		procArgs: procArgs,
+		added:  time.Now(),
+		srcPID: srcPID,
 	}
 
 	if o.pidsToRULs.Has(srcPID) {
@@ -327,12 +324,11 @@ func (o *sessionTracker) DeleteRemoteUserLoginsBefore(t time.Time) {
 }
 
 type user struct {
-	added    time.Time
-	srcPID   int
-	hasRUL   bool
-	login    common.RemoteUserLogin
-	cached   []*aucoalesce.Event
-	procArgs []string
+	added  time.Time
+	srcPID int
+	hasRUL bool
+	login  common.RemoteUserLogin
+	cached []*aucoalesce.Event
 }
 
 func (o *user) setRemoteUserLoginInfo(login common.RemoteUserLogin) {
@@ -372,7 +368,9 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	if evt.Metadata.Extra == nil {
 		evt.Metadata.Extra = make(map[string]any)
 	}
-	evt.Metadata.Extra["process_args"] = ae.Process.Args
+	if len(ae.Process.Args) > 0 {
+		evt.Metadata.Extra["process_args"] = ae.Process.Args
+	}
 
 	evt.LoggedAt = ae.Timestamp
 	evt.Metadata.AuditID = ae.Session
