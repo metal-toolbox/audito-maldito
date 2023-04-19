@@ -47,7 +47,7 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	var auditLogDirPath string
 	var enableMetrics bool
 	var enableHealthz bool
-	logLevel := zapcore.DebugLevel // TODO: Switch default back to zapcore.ErrorLevel.
+	logLevel := zapcore.ErrorLevel
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
 
