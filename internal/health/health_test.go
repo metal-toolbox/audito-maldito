@@ -2,12 +2,11 @@ package health
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
 func TestNewHealth_DefaultReadiness(t *testing.T) {
@@ -37,13 +36,13 @@ func TestHealth_WaitForReady(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(testtools.Intn(t, 0, 20))
+	numServices := 20
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness("test")
+		h.AddReadiness(fmt.Sprintf("test-%d", i))
 
 		assert.False(t, h.IsReady(), "health should not be ready yet")
 
-		go h.OnReady("test")
+		go h.OnReady(fmt.Sprintf("test-%d", i))
 	}
 
 	select {
@@ -65,14 +64,14 @@ func TestHealth_WaitForReadyCtxOrTimeout_Canceled(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(testtools.Intn(t, 0, 20))
+	numServices := 30
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness("test")
+		h.AddReadiness(fmt.Sprintf("test-%d", i))
 	}
 
 	err := <-h.WaitForReady(ctx)
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.False(t, h.IsReady(), "health should not ready")
+	assert.False(t, h.IsReady(), "health should not be ready")
 }
 
 func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
@@ -83,12 +82,12 @@ func TestHealth_WaitForReadyCtxOrTimeout_TimedOut(t *testing.T) {
 
 	h := NewHealth()
 
-	numServices := int(testtools.Intn(t, 0, 20))
+	numServices := 40
 	for i := 0; i < numServices; i++ {
-		h.AddReadiness("test")
+		h.AddReadiness(fmt.Sprintf("test-%d", i))
 	}
 
 	err := <-h.WaitForReady(ctx)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.False(t, h.IsReady(), "health should not ready")
+	assert.False(t, h.IsReady(), "health should not be ready")
 }
