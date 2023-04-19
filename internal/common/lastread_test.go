@@ -1,6 +1,7 @@
 package common
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -62,4 +63,27 @@ func Test_DoGetLastRead(t *testing.T) {
 
 		assert.Equal(t, exp, i)
 	})
+}
+
+func TestEnsureFlushDirectory_DirAlreadyExists(t *testing.T) {
+	t.Parallel()
+
+	filePath := filepath.Join(t.TempDir(), "x")
+
+	err := ensureFlushDirectory(filePath)
+	assert.Nil(t, err)
+}
+
+func TestEnsureFlushDirectory_DirDoesNotExist(t *testing.T) {
+	t.Parallel()
+
+	filePath := filepath.Join(t.TempDir(), "does-not-exist", "some-file")
+
+	err := ensureFlushDirectory(filePath)
+	assert.Nil(t, err)
+
+	info, err := os.Stat(filepath.Dir(filePath))
+	assert.Nil(t, err)
+
+	assert.Equal(t, info.Mode().Perm(), fs.FileMode(flushDirPerms))
 }
