@@ -2,7 +2,7 @@ package common
 
 type RemoteUserLoginValidateError struct {
 	noEvent bool
-	noPID   bool
+	badPID  bool
 	noCred  bool
 	message string
 }

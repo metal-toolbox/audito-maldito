@@ -12,7 +12,12 @@ const (
 
 // GetMachineID returns the machine ID.
 func GetMachineID() (string, error) {
-	machineID, err := os.ReadFile(MachineIDPath)
+	return getMachineID(MachineIDPath)
+}
+
+// getMachineID is the actual (testable) implementation of GetMachineID.
+func getMachineID(filePath string) (string, error) {
+	machineID, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}

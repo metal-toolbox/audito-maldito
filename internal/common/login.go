@@ -16,10 +16,10 @@ func (o RemoteUserLogin) Validate() error {
 		}
 	}
 
-	if o.PID == 0 {
+	if o.PID <= 0 {
 		return &RemoteUserLoginValidateError{
-			noPID:   true,
-			message: "pid is zero",
+			badPID:  true,
+			message: "pid is less than or equal to zero",
 		}
 	}
 
