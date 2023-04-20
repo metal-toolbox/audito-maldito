@@ -11,7 +11,6 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/auditevent/helpers"
-	"github.com/nxadm/tail"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -24,8 +23,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/processors"
-	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
+	"github.com/metal-toolbox/audito-maldito/internal/varlogsecure"
 )
 
 const usage = `audito-maldito
@@ -172,77 +171,8 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	logger.Infoln("starting workers...")
 	pprov := metrics.NewPrometheusMetricsProvider()
 
-	if distro == util.DistroRocky {
-		eg.Go(func() error {
-			defer logger.Infoln("rocky worker exited")
-
-			// Create a tail
-			t, err := tail.TailFile(
-				"/var/log/secure", tail.Config{Follow: true, ReOpen: true})
-			if err != nil {
-				return err
-			}
-
-			defer func() {
-				t.Cleanup()
-			}()
-
-			r := rocky.RockyProcessor{}
-
-			for {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case line, isOpen := <-t.Lines:
-					if !isOpen {
-						return fmt.Errorf("/var/log/secure chan closed")
-					}
-					pm, err := r.Process(ctx, line.Text)
-					if err != nil {
-						logger.Errorf("error processing rocky secure logs %s", err.Error())
-						continue
-					}
-					if pm.PID != "" {
-						err := processors.ProcessEntry(&processors.ProcessEntryConfig{
-							Ctx:       ctx,
-							Logins:    logins,
-							LogEntry:  pm.LogEntry,
-							NodeName:  nodename,
-							MachineID: mid,
-							When:      time.Now(),
-							Pid:       pm.PID,
-							EventW:    eventWriter,
-							Metrics:   pprov,
-						})
-						if err != nil {
-							return err
-						}
-					}
-				}
-			}
-		})
-	} else {
-		h.AddReadiness(journald.JournaldReaderComponentName)
-		eg.Go(func() error {
-			jp := journald.Processor{
-				BootID:    bootID,
-				MachineID: mid,
-				NodeName:  nodename,
-				Distro:    distro,
-				EventW:    eventWriter,
-				Logins:    logins,
-				CurrentTS: lastReadJournalTS,
-				Health:    h,
-				Metrics:   pprov,
-			}
-
-			err := jp.Read(groupCtx)
-			if logger.Level().Enabled(zap.DebugLevel) {
-				logger.Debugf("journald worker exited (%v)", err)
-			}
-			return err
-		})
-	}
+	runProcessorsForSSHLogins(groupCtx, logins, eg, distro,
+		mid, nodename, bootID, lastReadJournalTS, eventWriter, h, pprov)
 
 	h.AddReadiness(auditd.AuditdProcessorComponentName)
 	eg.Go(func() error {
@@ -274,6 +204,66 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	logger.Infoln("all workers finished without error")
 
 	return nil
+}
+
+func runProcessorsForSSHLogins(
+	ctx context.Context,
+	logins chan<- common.RemoteUserLogin,
+	eg *errgroup.Group,
+	distro util.DistroType,
+	mid string,
+	nodename string,
+	bootID string,
+	lastReadJournalTS uint64,
+	eventWriter *auditevent.EventWriter,
+	h *health.Health,
+	pprov *metrics.PrometheusMetricsProvider,
+) {
+	//nolint:exhaustive // In this case it's actually simpler to just default to journald
+	switch distro {
+	case util.DistroRocky:
+		// TODO: handle last read timestamp
+		eg.Go(func() error {
+			h.AddReadiness(varlogsecure.VarLogSecureComponentName)
+			vls := varlogsecure.VarLogSecure{
+				L:         logger,
+				Logins:    logins,
+				NodeName:  nodename,
+				MachineID: mid,
+				AuWriter:  eventWriter,
+				Health:    h,
+				Metrics:   pprov,
+			}
+			if err := vls.Read(ctx); err != nil {
+				logger.Errorf("varlogsecure worker failed: %v", err)
+				return err
+			}
+
+			logger.Debugf("varlogsecure worker exited")
+			return nil
+		})
+	default:
+		h.AddReadiness(journald.JournaldReaderComponentName)
+		eg.Go(func() error {
+			jp := journald.Processor{
+				BootID:    bootID,
+				MachineID: mid,
+				NodeName:  nodename,
+				Distro:    distro,
+				EventW:    eventWriter,
+				Logins:    logins,
+				CurrentTS: lastReadJournalTS,
+				Health:    h,
+				Metrics:   pprov,
+			}
+
+			err := jp.Read(ctx)
+			if logger.Level().Enabled(zap.DebugLevel) {
+				logger.Debugf("journald worker exited (%v)", err)
+			}
+			return err
+		})
+	}
 }
 
 // lastReadJournalTimeStamp returns the last-read journal entry's timestamp
