@@ -21,10 +21,10 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
-	"github.com/metal-toolbox/audito-maldito/internal/varlogsecure"
 	"github.com/metal-toolbox/audito-maldito/processors"
 	"github.com/metal-toolbox/audito-maldito/processors/auditd"
 	"github.com/metal-toolbox/audito-maldito/processors/auditd/dirreader"
+	"github.com/metal-toolbox/audito-maldito/processors/varlogsecure"
 )
 
 const usage = `audito-maldito
