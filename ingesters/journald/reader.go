@@ -16,7 +16,7 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
-	"github.com/metal-toolbox/audito-maldito/processors"
+	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 )
 
 const (
@@ -158,7 +158,7 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 	usec := entry.GetTimeStamp()
 	jp.CurrentTS = usec
 
-	err := processors.ProcessEntry(&processors.ProcessEntryConfig{
+	err := sshd.ProcessEntry(&sshd.ProcessEntryConfig{
 		Ctx:       ctx,
 		Logins:    jp.Logins,
 		LogEntry:  entryMsg,

@@ -21,9 +21,9 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
-	"github.com/metal-toolbox/audito-maldito/processors"
 	"github.com/metal-toolbox/audito-maldito/processors/auditd"
 	"github.com/metal-toolbox/audito-maldito/processors/auditd/dirreader"
+	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 	"github.com/metal-toolbox/audito-maldito/processors/varlogsecure"
 )
 
@@ -116,7 +116,7 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 
 	auditd.SetLogger(logger)
 	journald.SetLogger(logger)
-	processors.SetLogger(logger)
+	sshd.SetLogger(logger)
 
 	distro, err := util.Distro()
 	if err != nil {
