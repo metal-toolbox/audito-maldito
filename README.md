@@ -113,15 +113,6 @@ with `sysctl <sysctl-name>`:
   - `fs.inotify.max_user_instances`
   - `fs.inotify.max_user_watches`
 
-#### Handling of audit file read failures
-
-Currently, the program will exit with a non-zero exit status if a single
-failure occurs when reading audit log files. The probability of such an
-error occurring may increase due to log rotation. The program was designed to
-be restarted in the event of an unexpected exit (i.e., through Kubernetes).
-This error handling pattern may be revisited in the future - but it assumes
-the parent process will restart the program when a failure occurs.
-
 ## Installation
 
 #### From source
