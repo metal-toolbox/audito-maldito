@@ -39,13 +39,21 @@ OPTIONS
 
 var logger *zap.SugaredLogger
 
-//nolint
+const (
+	// DefaultHTTPServerReadTimeout is the default HTTP server read timeout.
+	DefaultHTTPServerReadTimeout = 1 * time.Second
+	// DefaultHTTPServerReadHeaderTimeout is the default HTTP server read header timeout.
+	DefaultHTTPServerReadHeaderTimeout = 5 * time.Second
+)
+
 func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig *zap.Config) error {
 	var bootID string
 	var auditlogpath string
 	var auditLogDirPath string
 	var enableMetrics bool
 	var enableHealthz bool
+	var httpServerReadTimeout time.Duration
+	var httpServerReadHeaderTimeout time.Duration
 	logLevel := zapcore.ErrorLevel
 
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
@@ -57,6 +65,11 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
 	flagSet.BoolVar(&enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.BoolVar(&enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
+	flagSet.DurationVar(&httpServerReadTimeout, "http-server-read-timeout",
+		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
+	flagSet.DurationVar(&httpServerReadHeaderTimeout, "http-server-read-header-timeout",
+		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
+
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flagSet.PrintDefaults()
@@ -116,7 +129,11 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	server := &http.Server{Addr: ":2112"}
+	server := &http.Server{
+		Addr:              ":2112",
+		ReadTimeout:       httpServerReadTimeout,
+		ReadHeaderTimeout: httpServerReadHeaderTimeout,
+	}
 
 	if enableMetrics {
 		http.Handle("/metrics", promhttp.Handler())
