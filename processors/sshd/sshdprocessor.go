@@ -13,8 +13,52 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/internal/metrics"
+	"github.com/metal-toolbox/audito-maldito/processors/metrics"
 )
+
+func NewSshdProcessor(
+	ctx context.Context,
+	logins chan<- common.RemoteUserLogin,
+	nodeName string,
+	machineID string,
+	eventW *auditevent.EventWriter,
+	m *metrics.PrometheusMetricsProvider,
+) *SshdProcessor {
+	return &SshdProcessor{
+		ctx:       ctx,
+		logins:    logins,
+		nodeName:  nodeName,
+		machineID: machineID,
+		eventW:    eventW,
+		metrics:   m,
+	}
+}
+
+type SshdProcessor struct {
+	ctx       context.Context //nolint
+	logins    chan<- common.RemoteUserLogin
+	logEntry  string
+	nodeName  string
+	machineID string
+	when      time.Time
+	pid       string
+	eventW    *auditevent.EventWriter
+	metrics   *metrics.PrometheusMetricsProvider
+}
+
+func (s *SshdProcessor) ProcessSshdLogEntry(ctx context.Context, sm SshdLogEntry) error {
+	return ProcessEntry(&SshdProcessor{
+		ctx:       ctx,
+		logins:    s.logins,
+		logEntry:  sm.Message,
+		nodeName:  s.nodeName,
+		machineID: s.machineID,
+		when:      time.Now(),
+		pid:       sm.PID,
+		eventW:    s.eventW,
+		metrics:   s.metrics,
+	})
+}
 
 const (
 	idxLoginUserName = "Username"
@@ -90,41 +134,29 @@ func extraDataWithCA(alg, keySum, certSerial, caData string) (*json.RawMessage, 
 	return &rawmsg, err
 }
 
-type ProcessEntryMessage struct {
-	LogEntry string
-	PID      string
+type SshdLogEntry struct {
+	Message string
+	PID     string
 }
 
-type ProcessEntryConfig struct {
-	Ctx       context.Context //nolint
-	Logins    chan<- common.RemoteUserLogin
-	LogEntry  string
-	NodeName  string
-	MachineID string
-	When      time.Time
-	Pid       string
-	EventW    *auditevent.EventWriter
-	Metrics   *metrics.PrometheusMetricsProvider
-}
-
-func ProcessEntry(config *ProcessEntryConfig) error {
-	var entryFunc func(*ProcessEntryConfig) error
+func ProcessEntry(config *SshdProcessor) error {
+	var entryFunc func(*SshdProcessor) error
 	switch {
-	case strings.HasPrefix(config.LogEntry, "Accepted publickey"):
+	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
-	case strings.HasPrefix(config.LogEntry, "Certificate invalid"):
+	case strings.HasPrefix(config.logEntry, "Certificate invalid"):
 		entryFunc = processCertificateInvalidEntry
-	case strings.HasSuffix(config.LogEntry, "not allowed because not listed in AllowUsers"):
+	case strings.HasSuffix(config.logEntry, "not allowed because not listed in AllowUsers"):
 		entryFunc = processNotInAllowUsersEntry
-	case strings.HasPrefix(config.LogEntry, "Invalid user"):
+	case strings.HasPrefix(config.logEntry, "Invalid user"):
 		entryFunc = processInvalidUserEntry
 	}
 
 	if entryFunc != nil {
-		logger.Infof("log line did match predefined regex, line: %s", config.LogEntry)
+		logger.Infof("log line did match predefined regex, line: %s", config.logEntry)
 		return entryFunc(config)
 	}
-	logger.Infof("log line did not match any predefined regex, line: %s", config.LogEntry)
+	logger.Infof("log line did not match any predefined regex, line: %s", config.logEntry)
 	// TODO(jaosorior): Should we log the entry if it didn't match?
 	return nil
 }
@@ -139,17 +171,17 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
-	matches := loginRE.FindStringSubmatch(config.LogEntry)
+func processAcceptPublicKeyEntry(config *SshdProcessor) error {
+	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for identifiers")
 		return nil
 	}
 
-	pid, err := strconv.Atoi(config.Pid)
+	pid, err := strconv.Atoi(config.pid)
 	if err != nil {
 		logger.Errorf("failed to convert pid string to int ('%s') - %s",
-			config.Pid, err)
+			config.pid, err)
 		return nil
 	}
 
@@ -171,33 +203,33 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 		auditevent.OutcomeSucceeded,
 		map[string]string{
 			"loggedAs": matches[usrIdx],
-			"pid":      config.Pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       config.NodeName,
-		"machine-id": config.MachineID,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = config.When
+	evt.LoggedAt = config.when
 
 	// SSHLogin
-	if len(config.LogEntry) == len(matches[0]) {
+	if len(config.logEntry) == len(matches[0]) {
 		// TODO: This log message is incorrect... but I am not sure
 		//  what this logic is trying to accomplish.
 		logger.Infoln("a: got login entry with no matches for certificate identifiers")
 		// Increment metric even if it fails to write the event
-		config.Metrics.IncLogins(metrics.SSHKeyLogin, metrics.Success)
+		config.metrics.IncLogins(metrics.SSHKeyLogin, metrics.Success)
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		if err := config.EventW.Write(evt); err != nil {
+		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
 			return fmt.Errorf("failed to write event: %w", err)
 		}
 		select {
-		case <-config.Ctx.Done():
+		case <-config.ctx.Done():
 			return nil
-		case config.Logins <- common.RemoteUserLogin{
+		case config.logins <- common.RemoteUserLogin{
 			Source:     evt,
 			PID:        pid,
 			CredUserID: common.UnknownUser,
@@ -207,24 +239,24 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 	}
 
 	certIdentifierStringStart := len(matches[0]) + 1
-	certIdentifierString := config.LogEntry[certIdentifierStringStart:]
+	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
 	// RemoteUserLogin with extra padding
 	if idMatches == nil {
 		logger.Infoln("b: got login entry with no matches for certificate identifiers")
 
-		config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
+		config.metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
 
 		addEventInfoForUnknownUser(evt, matches[algIdx], matches[keyIdx])
-		if err := config.EventW.Write(evt); err != nil {
+		if err := config.eventW.Write(evt); err != nil {
 			// NOTE(jaosorior): Not being able to write audit events
 			// merits us panicking here.
 			return fmt.Errorf("failed to write event: %w", err)
 		}
 		select {
-		case <-config.Ctx.Done():
+		case <-config.ctx.Done():
 			return nil
-		case config.Logins <- common.RemoteUserLogin{
+		case config.logins <- common.RemoteUserLogin{
 			Source:     evt,
 			PID:        pid,
 			CredUserID: common.UnknownUser,
@@ -249,13 +281,13 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 
 	var debugLogger *zap.SugaredLogger
 	if logger.Level().Enabled(zap.DebugLevel) {
-		debugLogger = logger.With("eventPID", config.Pid)
+		debugLogger = logger.With("eventPID", config.pid)
 		debugLogger.Debugln("writing event to auditevent writer...")
 	}
 
 	// Increment metric even if it fails to write the event
-	config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
-	if err := config.EventW.Write(evt); err != nil {
+	config.metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
 		return fmt.Errorf("failed to write event: %w", err)
@@ -271,9 +303,9 @@ func processAcceptPublicKeyEntry(config *ProcessEntryConfig) error {
 
 	// RemoteUserLogin with CA entry
 	select {
-	case <-config.Ctx.Done():
+	case <-config.ctx.Done():
 		return nil
-	case config.Logins <- common.RemoteUserLogin{
+	case config.logins <- common.RemoteUserLogin{
 		Source:     evt,
 		PID:        pid,
 		CredUserID: usernameFromCert,
@@ -293,8 +325,8 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(config *ProcessEntryConfig) error {
-	reason := getCertificateInvalidReason(config.LogEntry)
+func processCertificateInvalidEntry(config *SshdProcessor) error {
+	reason := getCertificateInvalidReason(config.logEntry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
 	//                  For flatcar, we could get it from the CGROUP.... not sure for Ubuntu though
@@ -314,15 +346,15 @@ func processCertificateInvalidEntry(config *ProcessEntryConfig) error {
 		map[string]string{
 			"loggedAs": common.UnknownUser,
 			"userID":   common.UnknownUser,
-			"pid":      config.Pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       config.NodeName,
-		"machine-id": config.MachineID,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
-	evt.LoggedAt = config.When
+	evt.LoggedAt = config.when
 
 	ed, ederr := extraDataForInvalidCert(reason)
 	if ederr != nil {
@@ -332,8 +364,8 @@ func processCertificateInvalidEntry(config *ProcessEntryConfig) error {
 	}
 
 	// Increment metric even if it fails to write the event
-	config.Metrics.IncLogins(metrics.SSHCertLogin, metrics.Failure)
-	if err := config.EventW.Write(evt); err != nil {
+	config.metrics.IncLogins(metrics.SSHCertLogin, metrics.Failure)
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("failed to write event: %w", err)
@@ -352,8 +384,8 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
-	matches := notInAllowUsersRE.FindStringSubmatch(config.LogEntry)
+func processNotInAllowUsersEntry(config *SshdProcessor) error {
+	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for not-in-allow-users")
 		return nil
@@ -372,19 +404,19 @@ func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
-			"pid":      config.Pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       config.NodeName,
-		"machine-id": config.MachineID,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
 	// Increment metric even if it fails to write the event
-	config.Metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 
-	evt.LoggedAt = config.When
-	if err := config.EventW.Write(evt); err != nil {
+	evt.LoggedAt = config.when
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("failed to write event: %w", err)
@@ -393,8 +425,8 @@ func processNotInAllowUsersEntry(config *ProcessEntryConfig) error {
 	return nil
 }
 
-func processInvalidUserEntry(config *ProcessEntryConfig) error {
-	matches := invalidUserRE.FindStringSubmatch(config.LogEntry)
+func processInvalidUserEntry(config *SshdProcessor) error {
+	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for invalid-user")
 		return nil
@@ -417,19 +449,19 @@ func processInvalidUserEntry(config *ProcessEntryConfig) error {
 		map[string]string{
 			"loggedAs": matches[usrIdx],
 			"userID":   common.UnknownUser,
-			"pid":      config.Pid,
+			"pid":      config.pid,
 		},
 		"sshd",
 	).WithTarget(map[string]string{
-		"host":       config.NodeName,
-		"machine-id": config.MachineID,
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
 	})
 
 	// Increment metric even if it fails to write the event
-	config.Metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 
-	evt.LoggedAt = config.When
-	if err := config.EventW.Write(evt); err != nil {
+	evt.LoggedAt = config.when
+	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us error-ing here.
 		return fmt.Errorf("failed to write event: %w", err)

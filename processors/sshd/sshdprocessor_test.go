@@ -357,16 +357,17 @@ func TestEntryProcessing(t *testing.T) {
 			w := auditevent.NewAuditEventWriter(enc)
 
 			logins := make(chan common.RemoteUserLogin, 1)
-			err := ProcessEntry(&ProcessEntryConfig{
-				Ctx:       ctx,
-				Logins:    logins,
-				LogEntry:  tt.args.logentry,
-				NodeName:  tt.args.nodename,
-				MachineID: tt.args.mid,
-				When:      expectedts,
-				Pid:       tt.args.pid,
-				EventW:    w,
-				Metrics:   metrics.NewPrometheusMetricsProviderForRegisterer(pr),
+			pprov := metrics.NewPrometheusMetricsProviderForRegisterer(pr)
+			err := ProcessEntry(&SshdProcessor{
+				ctx:       ctx,
+				logins:    logins,
+				logEntry:  tt.args.logentry,
+				nodeName:  tt.args.nodename,
+				machineID: tt.args.mid,
+				when:      expectedts,
+				pid:       tt.args.pid,
+				eventW:    w,
+				metrics:   pprov,
 			})
 			assert.NoError(t, err)
 
