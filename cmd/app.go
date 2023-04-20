@@ -46,28 +46,35 @@ const (
 	DefaultHTTPServerReadHeaderTimeout = 5 * time.Second
 )
 
-func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig *zap.Config) error {
-	var bootID string
-	var auditlogpath string
-	var auditLogDirPath string
-	var enableMetrics bool
-	var enableHealthz bool
-	var httpServerReadTimeout time.Duration
-	var httpServerReadHeaderTimeout time.Duration
-	logLevel := zapcore.ErrorLevel
+type appConfig struct {
+	bootID                      string
+	auditlogpath                string
+	auditLogDirPath             string
+	enableMetrics               bool
+	enableHealthz               bool
+	httpServerReadTimeout       time.Duration
+	httpServerReadHeaderTimeout time.Duration
+	logLevel                    zapcore.Level
+}
 
+func parseFlags(osArgs []string) (*appConfig, error) {
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
 
+	appConfig := &appConfig{
+		logLevel: zapcore.InfoLevel,
+	}
+
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
-	flagSet.StringVar(&bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
-	flagSet.StringVar(&auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
-	flagSet.StringVar(&auditLogDirPath, "audit-dir-path", "/var/log/audit", "Path to the Linux audit log directory")
-	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
-	flagSet.BoolVar(&enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
-	flagSet.BoolVar(&enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
-	flagSet.DurationVar(&httpServerReadTimeout, "http-server-read-timeout",
+	flagSet.StringVar(&appConfig.bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
+	flagSet.StringVar(&appConfig.auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
+	flagSet.StringVar(&appConfig.auditLogDirPath, "audit-dir-path", "/var/log/audit",
+		"Path to the Linux audit log directory")
+	flagSet.Var(&appConfig.logLevel, "log-level", "Set the log level according to zapcore.Level")
+	flagSet.BoolVar(&appConfig.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
+	flagSet.BoolVar(&appConfig.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
+	flagSet.DurationVar(&appConfig.httpServerReadTimeout, "http-server-read-timeout",
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
-	flagSet.DurationVar(&httpServerReadHeaderTimeout, "http-server-read-header-timeout",
+	flagSet.DurationVar(&appConfig.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
 		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
 
 	flagSet.Usage = func() {
@@ -76,9 +83,17 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 		os.Exit(1)
 	}
 
-	err := flagSet.Parse(osArgs[1:])
+	if err := flagSet.Parse(osArgs[1:]); err != nil {
+		return nil, err
+	}
+
+	return appConfig, nil
+}
+
+func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig *zap.Config) error {
+	appCfg, err := parseFlags(osArgs)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
 	if optLoggerConfig == nil {
@@ -86,7 +101,7 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 		optLoggerConfig = &cfg
 	}
 
-	optLoggerConfig.Level = zap.NewAtomicLevelAt(logLevel)
+	optLoggerConfig.Level = zap.NewAtomicLevelAt(appCfg.logLevel)
 
 	l, err := optLoggerConfig.Build()
 	if err != nil {
@@ -124,47 +139,18 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 
 	eg, groupCtx := errgroup.WithContext(ctx)
 
-	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(groupCtx, auditlogpath, zapr.NewLogger(l))
+	auf, auditfileerr := helpers.OpenAuditLogFileUntilSuccessWithContext(
+		groupCtx, appCfg.auditlogpath, zapr.NewLogger(l))
 	if auditfileerr != nil {
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
-	server := &http.Server{
-		Addr:              ":2112",
-		ReadTimeout:       httpServerReadTimeout,
-		ReadHeaderTimeout: httpServerReadHeaderTimeout,
-	}
+	handleMetricsAndHealth(groupCtx, appCfg, eg, h)
 
-	if enableMetrics {
-		http.Handle("/metrics", promhttp.Handler())
-	}
-
-	if enableHealthz {
-		http.Handle("/readyz", h.ReadyzHandler())
-		// TODO: Add livez endpoint
-	}
-
-	if enableMetrics || enableHealthz {
-		eg.Go(func() error {
-			logger.Infoln("Starting HTTP server on :2112")
-			if err := server.ListenAndServe(); err != nil {
-				logger.Errorf("Failed to start HTTP metrics server: %v", err)
-				return err
-			}
-			return nil
-		})
-
-		eg.Go(func() error {
-			<-groupCtx.Done()
-			logger.Infoln("Stopping HTTP metrics server")
-			return server.Shutdown(groupCtx)
-		})
-	}
-
-	logDirReader, err := dirreader.StartLogDirReader(groupCtx, auditLogDirPath)
+	logDirReader, err := dirreader.StartLogDirReader(groupCtx, appCfg.auditLogDirPath)
 	if err != nil {
 		return fmt.Errorf("failed to create linux audit dir reader for '%s' - %w",
-			auditLogDirPath, err)
+			appCfg.auditLogDirPath, err)
 	}
 
 	h.AddReadiness(dirreader.DirReaderComponentName)
@@ -189,7 +175,7 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	pprov := metrics.NewPrometheusMetricsProvider()
 
 	runProcessorsForSSHLogins(groupCtx, logins, eg, distro,
-		mid, nodename, bootID, lastReadJournalTS, eventWriter, h, pprov)
+		mid, nodename, appCfg.bootID, lastReadJournalTS, eventWriter, h, pprov)
 
 	h.AddReadiness(auditd.AuditdProcessorComponentName)
 	eg.Go(func() error {
@@ -279,6 +265,44 @@ func runProcessorsForSSHLogins(
 				logger.Debugf("journald worker exited (%v)", err)
 			}
 			return err
+		})
+	}
+}
+
+// handleMetricsAndHealth starts a HTTP server on port 2112 to serve metrics and health endpoints.
+// If metrics are disabled, the /metrics endpoint will return 404.
+// If health is disabled, the /readyz endpoint will return 404.
+// If both are disabled, the HTTP server will not be started.
+func handleMetricsAndHealth(ctx context.Context, appCfg *appConfig, eg *errgroup.Group, h *health.Health) {
+	server := &http.Server{
+		Addr:              ":2112",
+		ReadTimeout:       appCfg.httpServerReadTimeout,
+		ReadHeaderTimeout: appCfg.httpServerReadHeaderTimeout,
+	}
+
+	if appCfg.enableMetrics {
+		http.Handle("/metrics", promhttp.Handler())
+	}
+
+	if appCfg.enableHealthz {
+		http.Handle("/readyz", h.ReadyzHandler())
+		// TODO: Add livez endpoint
+	}
+
+	if appCfg.enableMetrics || appCfg.enableHealthz {
+		eg.Go(func() error {
+			logger.Infoln("Starting HTTP server on :2112")
+			if err := server.ListenAndServe(); err != nil {
+				logger.Errorf("Failed to start HTTP metrics server: %v", err)
+				return err
+			}
+			return nil
+		})
+
+		eg.Go(func() error {
+			<-ctx.Done()
+			logger.Infoln("Stopping HTTP metrics server")
+			return server.Shutdown(ctx)
 		})
 	}
 }
