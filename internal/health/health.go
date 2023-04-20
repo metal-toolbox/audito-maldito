@@ -122,21 +122,18 @@ func (o *Health) GetReadyzStatusMap() map[string]string {
 	return smap
 }
 
-func (o *Health) readyzHandler(w http.ResponseWriter, r *http.Request) {
-	smap := o.GetReadyzStatusMap()
-	if err := json.NewEncoder(w).Encode(smap); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+func (o *Health) readyzHandler(w http.ResponseWriter, _ *http.Request) {
+	status := o.GetReadyzStatusMap()
 
-	// We don't use `o.IsReady()` here we don't want to iterate
+	// We don't use `o.IsReady()` here. We don't want to iterate
 	// over the map again.
-	if smap[OverallReady] == ComponentReady {
+	if status[OverallReady] == ComponentReady {
 		w.WriteHeader(http.StatusOK)
-		return
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 
-	w.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (o *Health) ReadyzHandler() http.Handler {
