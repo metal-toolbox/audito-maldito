@@ -5,26 +5,21 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetMachineID(t *testing.T) {
 	t.Parallel()
 
 	f, err := os.CreateTemp(t.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 	defer f.Close()
 
 	_, err = f.WriteString("foobar")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	id, err := getMachineID(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	assert.Equal(t, "foobar", id)
 }
@@ -33,15 +28,11 @@ func TestGetMachineID_TrimSpace(t *testing.T) {
 	t.Parallel()
 
 	f, err := os.CreateTemp(t.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 	defer f.Close()
 
 	_, err = f.WriteString("    foobar        \n")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	id, err := getMachineID(f.Name())
 	if err != nil {
