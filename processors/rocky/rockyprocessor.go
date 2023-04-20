@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/metal-toolbox/audito-maldito/internal/processors"
+	"github.com/metal-toolbox/audito-maldito/processors"
 )
 
 type RockyProcessor struct{}

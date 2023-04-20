@@ -8,7 +8,7 @@ import (
 	"github.com/elastic/go-libaudit/v2/aucoalesce"
 	"github.com/elastic/go-libaudit/v2/auparse"
 
-	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
+	"github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
 )
 
 var _ libaudit.Stream = &reassemblerCB{}

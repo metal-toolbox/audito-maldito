@@ -1,4 +1,4 @@
-package app
+package cmd
 
 import (
 	"context"
@@ -16,15 +16,15 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/metal-toolbox/audito-maldito/internal/auditd"
-	"github.com/metal-toolbox/audito-maldito/internal/auditd/dirreader"
+	"github.com/metal-toolbox/audito-maldito/ingesters/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
-	"github.com/metal-toolbox/audito-maldito/internal/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
-	"github.com/metal-toolbox/audito-maldito/internal/processors"
 	"github.com/metal-toolbox/audito-maldito/internal/util"
-	"github.com/metal-toolbox/audito-maldito/internal/varlogsecure"
+	"github.com/metal-toolbox/audito-maldito/processors"
+	"github.com/metal-toolbox/audito-maldito/processors/auditd"
+	"github.com/metal-toolbox/audito-maldito/processors/auditd/dirreader"
+	"github.com/metal-toolbox/audito-maldito/processors/varlogsecure"
 )
 
 const usage = `audito-maldito
