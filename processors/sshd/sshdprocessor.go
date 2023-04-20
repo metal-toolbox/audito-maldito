@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
-	"github.com/metal-toolbox/audito-maldito/processors/metrics"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 )
 
 func NewSshdProcessor(
