@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
+	"github.com/metal-toolbox/audito-maldito/processors/rocky"
 )
 
 //go:embed testdata/secure.log

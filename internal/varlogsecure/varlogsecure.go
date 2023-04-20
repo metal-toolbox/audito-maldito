@@ -14,8 +14,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
-	"github.com/metal-toolbox/audito-maldito/internal/processors"
-	"github.com/metal-toolbox/audito-maldito/internal/processors/rocky"
+	"github.com/metal-toolbox/audito-maldito/processors"
+	"github.com/metal-toolbox/audito-maldito/processors/rocky"
 )
 
 const (

@@ -10,9 +10,9 @@ import (
 	"github.com/metal-toolbox/auditevent"
 	"go.uber.org/zap"
 
-	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
+	"github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
 )
 
 const (

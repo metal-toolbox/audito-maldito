@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker"
-	fakest "github.com/metal-toolbox/audito-maldito/internal/auditd/sessiontracker/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
+	"github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
+	fakest "github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker/fakes"
 )
 
 func TestAuditd_Read_RemoteLoginError(t *testing.T) {
