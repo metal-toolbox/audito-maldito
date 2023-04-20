@@ -133,6 +133,7 @@ func (o *Health) readyzHandler(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 
+	//nolint:errcheck,errchkjson // Yes, I do not want to check it.
 	_ = json.NewEncoder(w).Encode(status)
 }
 
