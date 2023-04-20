@@ -163,7 +163,6 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 		Message: entryMsg,
 		PID:     entry.GetPID(),
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)
 	}
