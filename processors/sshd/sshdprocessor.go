@@ -1,4 +1,4 @@
-package processors
+package sshd
 
 import (
 	"context"

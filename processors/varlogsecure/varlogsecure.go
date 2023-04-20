@@ -14,8 +14,8 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
-	"github.com/metal-toolbox/audito-maldito/processors"
 	"github.com/metal-toolbox/audito-maldito/processors/rocky"
+	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 )
 
 const (
@@ -73,7 +73,7 @@ func (v *VarLogSecure) Read(ctx context.Context) error {
 				continue
 			}
 			if pm.PID != "" {
-				err := processors.ProcessEntry(&processors.ProcessEntryConfig{
+				err := sshd.ProcessEntry(&sshd.ProcessEntryConfig{
 					Ctx:       ctx,
 					Logins:    v.Logins,
 					LogEntry:  pm.LogEntry,
