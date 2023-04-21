@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
 	"github.com/metal-toolbox/audito-maldito/ingesters/rocky"
 	"github.com/metal-toolbox/audito-maldito/ingesters/rocky/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
-	"github.com/stretchr/testify/assert"
-
-	"go.uber.org/zap"
 )
 
 //go:embed testdata/secure.log
@@ -45,12 +45,16 @@ func TestIngest(t *testing.T) {
 	t.Parallel()
 
 	tmpDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Errorf("failed to initialize tests: Could not create %s dir", tmpDir)
+	}
+
 	pipePath := fmt.Sprintf("%s/secure-pipe", tmpDir)
 
 	defer func() {
 		os.RemoveAll(tmpDir)
 	}()
-	err = syscall.Mkfifo(pipePath, 0664)
+	err = syscall.Mkfifo(pipePath, 0o664)
 	if err != nil {
 		t.Errorf("failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	}
@@ -68,7 +72,10 @@ func TestIngest(t *testing.T) {
 	}
 
 	go func() {
-		ri.Ingest(ctx)
+		err := ri.Ingest(ctx)
+		if err != nil {
+			return
+		}
 	}()
 
 	go func() {
@@ -85,12 +92,9 @@ func TestIngest(t *testing.T) {
 		}
 	}()
 
-	for {
-		select {
-		case count := <-countChan:
-			if count == 5 {
-				return
-			}
+	for count := range countChan {
+		if count == 5 {
+			return
 		}
 	}
 }

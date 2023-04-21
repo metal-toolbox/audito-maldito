@@ -28,11 +28,15 @@ func (s *SyslogIngester) Process(ctx context.Context, line string) error {
 	return s.SshdProcessor.ProcessSshdLogEntry(ctx, sm)
 }
 
+// ParseSyslogMessage expects a message in the form of "<PID> <Message>".
 func (s *SyslogIngester) ParseSyslogMessage(entry string) sshd.SshdLogEntry {
+	minimumEntrySplitLength := 2
 	entrySplit := strings.Split(entry, " ")
-	if len(entrySplit) < 2 {
+
+	if len(entrySplit) < minimumEntrySplitLength {
 		return sshd.SshdLogEntry{}
 	}
+
 	pid := entrySplit[0]
 	logMsg := strings.Join(entrySplit[1:], " ")
 	logMsg = strings.TrimLeft(logMsg, " ")

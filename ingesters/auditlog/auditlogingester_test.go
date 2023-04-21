@@ -7,21 +7,25 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/ingesters/auditlog"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestIngest(t *testing.T) {
 	t.Parallel()
 	tmpDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Errorf("failed to initialize tests: Could not create %s dir", tmpDir)
+	}
+
 	pipePath := fmt.Sprintf("%s/audit-pipe", tmpDir)
 	defer func() {
 		os.RemoveAll(tmpDir)
 	}()
-	err = syscall.Mkfifo(pipePath, 0664)
+	err = syscall.Mkfifo(pipePath, 0o664)
 	if err != nil {
 		t.Errorf("failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	}
@@ -39,7 +43,10 @@ func TestIngest(t *testing.T) {
 
 	ctx := context.Background()
 	go func() {
-		ali.Ingest(ctx)
+		err := ali.Ingest(ctx)
+		if err != nil {
+			return
+		}
 	}()
 
 	go func() {
@@ -50,7 +57,6 @@ func TestIngest(t *testing.T) {
 
 		for range []int{0, 1, 2, 3, 4} {
 			_, err := file.WriteString("foo bar\n")
-
 			if err != nil {
 				t.Errorf("error writing to pipe %s", pipePath)
 			}
@@ -58,13 +64,9 @@ func TestIngest(t *testing.T) {
 	}()
 
 	readCount := 0
-	for {
-		select {
-		case line := <-auditLogChan:
-			assert.Equal(t, "foo bar\n", line)
-			readCount++
-		}
-
+	for line := range auditLogChan {
+		assert.Equal(t, "foo bar\n", line)
+		readCount++
 		if readCount == 5 {
 			break
 		}

@@ -7,22 +7,26 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
 	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
-	"github.com/stretchr/testify/assert"
-
-	"go.uber.org/zap"
 )
 
 func TestIngest(t *testing.T) {
 	t.Parallel()
 
 	tmpDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Errorf("failed to initialize tests: Could not create %s dir", tmpDir)
+	}
+
 	pipePath := fmt.Sprintf("%s/named-pipe", tmpDir)
 	defer func() {
 		os.RemoveAll(tmpDir)
 	}()
-	err = syscall.Mkfifo(pipePath, 0664)
+	err = syscall.Mkfifo(pipePath, 0o664)
 	if err != nil {
 		t.Errorf("failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	}
@@ -34,15 +38,20 @@ func TestIngest(t *testing.T) {
 	ctx := context.Background()
 	callCount := 0
 	done := make(chan struct{})
-	callback := func(ctx context.Context, l string) error {
+	//nolint
+	callback := func(ctx2 context.Context, l string) error {
 		callCount++
 		if callCount == 5 {
 			done <- struct{}{}
 		}
+		ctx.Value("")
 		return nil
 	}
 	go func() {
-		np.Ingest(ctx, pipePath, '\n', callback, sugar, h)
+		err := np.Ingest(ctx, pipePath, '\n', callback, sugar, h)
+		if err != nil {
+			return
+		}
 	}()
 
 	go func() {
