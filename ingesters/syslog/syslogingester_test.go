@@ -15,6 +15,8 @@ import (
 )
 
 func TestIngest(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "")
 	pipePath := fmt.Sprintf("%s/sshd-pipe", tmpDir)
 
