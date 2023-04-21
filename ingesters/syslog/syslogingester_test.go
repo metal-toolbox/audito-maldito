@@ -7,11 +7,11 @@ import (
 	"syscall"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/metal-toolbox/audito-maldito/ingesters/syslog"
 	"github.com/metal-toolbox/audito-maldito/ingesters/syslog/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
-
-	"go.uber.org/zap"
 )
 
 func TestIngest(t *testing.T) {
