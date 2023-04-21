@@ -677,6 +677,9 @@ func TestUser_ToAuditEvent(t *testing.T) {
 	}
 
 	ae := &aucoalesce.Event{
+		Process: aucoalesce.Process{
+			Args: []string{"foo", "bar"},
+		},
 		Result:    "success",
 		Session:   "123",
 		Timestamp: time.Now(),
@@ -702,7 +705,7 @@ func TestUser_ToAuditEvent(t *testing.T) {
 	assert.Equal(t, ae.Summary.Action, event.Metadata.Extra["action"])
 	assert.Equal(t, ae.Summary.How, event.Metadata.Extra["how"])
 	assert.Equal(t, ae.Summary.Object, event.Metadata.Extra["object"])
-
+	assert.Equal(t, ae.Process.Args, event.Metadata.Extra["process_args"])
 	assert.Len(t, event.Subjects, len(u.login.Source.Subjects))
 	for k, v := range u.login.Source.Subjects {
 		x, hasIt := event.Subjects[k]
