@@ -5,7 +5,6 @@ package varlogsecure
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/metal-toolbox/auditevent"
 	"github.com/nxadm/tail"
@@ -27,13 +26,14 @@ const (
 
 // VarLogSecure is a helper struct to read from /var/log/secure.
 type VarLogSecure struct {
-	L         *zap.SugaredLogger
-	Logins    chan<- common.RemoteUserLogin
-	NodeName  string
-	MachineID string
-	AuWriter  *auditevent.EventWriter
-	Health    *health.Health
-	Metrics   *metrics.PrometheusMetricsProvider
+	L             *zap.SugaredLogger
+	Logins        chan<- common.RemoteUserLogin
+	NodeName      string
+	MachineID     string
+	AuWriter      *auditevent.EventWriter
+	Health        *health.Health
+	Metrics       *metrics.PrometheusMetricsProvider
+	SshdProcessor *sshd.SshdProcessor
 }
 
 // Read reads from /var/log/secure and processes the lines into
@@ -67,22 +67,15 @@ func (v *VarLogSecure) Read(ctx context.Context) error {
 			if !isOpen {
 				return fmt.Errorf("/var/log/secure chan closed")
 			}
-			pm, err := r.Process(ctx, line.Text)
+			le, err := r.Process(ctx, line.Text)
 			if err != nil {
 				v.L.Errorf("error processing rocky secure logs %s", err.Error())
 				continue
 			}
-			if pm.PID != "" {
-				err := sshd.ProcessEntry(&sshd.ProcessEntryConfig{
-					Ctx:       ctx,
-					Logins:    v.Logins,
-					LogEntry:  pm.LogEntry,
-					NodeName:  v.NodeName,
-					MachineID: v.MachineID,
-					When:      time.Now(),
-					Pid:       pm.PID,
-					EventW:    v.AuWriter,
-					Metrics:   v.Metrics,
+			if le.PID != "" {
+				err := r.SshdProcessor.ProcessSshdLogEntry(ctx, sshd.SshdLogEntry{
+					Message: le.Message,
+					PID:     le.PID,
 				})
 				if err != nil {
 					return err

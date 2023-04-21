@@ -8,7 +8,9 @@ import (
 	sshd "github.com/metal-toolbox/audito-maldito/processors/sshd"
 )
 
-type RockyProcessor struct{}
+type RockyProcessor struct {
+	SshdProcessor *sshd.SshdProcessor
+}
 
 // pidRE regex matches a sshd log line extracting the procid and message into a match group
 // example log line:
@@ -25,15 +27,15 @@ var pidRE = regexp.MustCompile(`sshd\[(?P<PROCID>\w+)\]: (?P<MSG>.+)`)
 // numberOfMatches should have 3 match groups.
 var numberOfMatches = 3
 
-func (r *RockyProcessor) Process(ctx context.Context, line string) (sshd.ProcessEntryMessage, error) {
+func (r *RockyProcessor) Process(ctx context.Context, line string) (sshd.SshdLogEntry, error) {
 	entryMatches := pidRE.FindStringSubmatch(line)
 	if entryMatches == nil {
-		return sshd.ProcessEntryMessage{}, nil
+		return sshd.SshdLogEntry{}, nil
 	}
 
 	if len(entryMatches) < numberOfMatches {
-		return sshd.ProcessEntryMessage{}, fmt.Errorf("match group less than 3")
+		return sshd.SshdLogEntry{}, fmt.Errorf("match group less than 3")
 	}
 
-	return sshd.ProcessEntryMessage{PID: entryMatches[1], LogEntry: entryMatches[2]}, nil
+	return sshd.SshdLogEntry{PID: entryMatches[1], Message: entryMatches[2]}, nil
 }

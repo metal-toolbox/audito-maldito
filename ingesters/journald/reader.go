@@ -37,16 +37,17 @@ func SetLogger(l *zap.SugaredLogger) {
 }
 
 type Processor struct {
-	BootID    string
-	MachineID string
-	NodeName  string
-	Distro    util.DistroType
-	EventW    *auditevent.EventWriter
-	Logins    chan<- common.RemoteUserLogin
-	CurrentTS uint64 // Microseconds since unix epoch.
-	Health    *health.Health
-	Metrics   *metrics.PrometheusMetricsProvider
-	jr        JournalReader
+	BootID        string
+	MachineID     string
+	NodeName      string
+	Distro        util.DistroType
+	EventW        *auditevent.EventWriter
+	Logins        chan<- common.RemoteUserLogin
+	CurrentTS     uint64 // Microseconds since unix epoch.
+	Health        *health.Health
+	Metrics       *metrics.PrometheusMetricsProvider
+	jr            JournalReader
+	SshdProcessor *sshd.SshdProcessor
 }
 
 func (jp *Processor) getJournalReader() JournalReader {
@@ -158,16 +159,9 @@ func (jp *Processor) readEntry(ctx context.Context) error {
 	usec := entry.GetTimeStamp()
 	jp.CurrentTS = usec
 
-	err := sshd.ProcessEntry(&sshd.ProcessEntryConfig{
-		Ctx:       ctx,
-		Logins:    jp.Logins,
-		LogEntry:  entryMsg,
-		NodeName:  jp.NodeName,
-		MachineID: jp.MachineID,
-		When:      time.UnixMicro(int64(usec)),
-		Pid:       entry.GetPID(),
-		EventW:    jp.EventW,
-		Metrics:   jp.Metrics,
+	err := jp.SshdProcessor.ProcessSshdLogEntry(ctx, sshd.SshdLogEntry{
+		Message: entryMsg,
+		PID:     entry.GetPID(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to process journal entry '%s': %w", entryMsg, err)

@@ -222,6 +222,8 @@ func runProcessorsForSSHLogins(
 	h *health.Health,
 	pprov *metrics.PrometheusMetricsProvider,
 ) {
+	sshdProcessor := sshd.NewSshdProcessor(ctx, logins, nodename, mid, eventWriter, pprov)
+
 	//nolint:exhaustive // In this case it's actually simpler to just default to journald
 	switch distro {
 	case util.DistroRocky:
@@ -229,13 +231,14 @@ func runProcessorsForSSHLogins(
 		eg.Go(func() error {
 			h.AddReadiness(varlogsecure.VarLogSecureComponentName)
 			vls := varlogsecure.VarLogSecure{
-				L:         logger,
-				Logins:    logins,
-				NodeName:  nodename,
-				MachineID: mid,
-				AuWriter:  eventWriter,
-				Health:    h,
-				Metrics:   pprov,
+				L:             logger,
+				Logins:        logins,
+				NodeName:      nodename,
+				MachineID:     mid,
+				AuWriter:      eventWriter,
+				Health:        h,
+				Metrics:       pprov,
+				SshdProcessor: sshdProcessor,
 			}
 			if err := vls.Read(ctx); err != nil {
 				logger.Errorf("varlogsecure worker failed: %v", err)
@@ -249,15 +252,16 @@ func runProcessorsForSSHLogins(
 		h.AddReadiness(journald.JournaldReaderComponentName)
 		eg.Go(func() error {
 			jp := journald.Processor{
-				BootID:    bootID,
-				MachineID: mid,
-				NodeName:  nodename,
-				Distro:    distro,
-				EventW:    eventWriter,
-				Logins:    logins,
-				CurrentTS: lastReadJournalTS,
-				Health:    h,
-				Metrics:   pprov,
+				BootID:        bootID,
+				MachineID:     mid,
+				NodeName:      nodename,
+				Distro:        distro,
+				EventW:        eventWriter,
+				Logins:        logins,
+				CurrentTS:     lastReadJournalTS,
+				Health:        h,
+				Metrics:       pprov,
+				SshdProcessor: sshdProcessor,
 			}
 
 			err := jp.Read(ctx)

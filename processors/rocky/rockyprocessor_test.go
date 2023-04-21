@@ -35,6 +35,6 @@ func TestRockyProcess(t *testing.T) {
 		}
 
 		assert.Equal(t, pm.PID, testSshdPid)
-		assert.Contains(t, line, pm.LogEntry)
+		assert.Contains(t, line, pm.Message)
 	}
 }
