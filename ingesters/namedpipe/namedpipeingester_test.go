@@ -3,7 +3,6 @@ package namedpipe_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"syscall"
 	"testing"
@@ -46,15 +45,12 @@ func TestIngest(t *testing.T) {
 
 	go func() {
 		file, err := os.OpenFile(pipePath, os.O_WRONLY, os.ModeNamedPipe)
-		log.Println("opened Pipe for writing")
 		if err != nil {
 			t.Errorf("failed to initialize tests: Could not open %s named pipe", pipePath)
 		}
 
 		for range []int{0, 1, 2, 3, 4} {
 			_, err := file.WriteString("foo bar\n")
-			log.Println("writing")
-
 			if err != nil {
 				t.Errorf("error writing to pipe %s", pipePath)
 			}

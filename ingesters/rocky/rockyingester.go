@@ -14,7 +14,7 @@ import (
 type RockyIngester struct {
 	namedPipeIngester namedpipe.NamedPipeIngester
 	FilePath          string
-	SshdProcessor     sshd.SshdProcessor
+	SshdProcessor     sshd.SshdProcessorer
 	Logger            *zap.SugaredLogger
 	Health            *health.Health
 }

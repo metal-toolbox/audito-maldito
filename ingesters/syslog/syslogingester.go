@@ -30,6 +30,9 @@ func (s *SyslogIngester) Process(ctx context.Context, line string) error {
 
 func (s *SyslogIngester) ParseSyslogMessage(entry string) sshd.SshdLogEntry {
 	entrySplit := strings.Split(entry, " ")
+	if len(entrySplit) < 2 {
+		return sshd.SshdLogEntry{}
+	}
 	pid := entrySplit[0]
 	logMsg := strings.Join(entrySplit[1:], " ")
 	logMsg = strings.TrimLeft(logMsg, " ")

@@ -33,7 +33,7 @@ type VarLogSecure struct {
 	AuWriter      *auditevent.EventWriter
 	Health        *health.Health
 	Metrics       *metrics.PrometheusMetricsProvider
-	SshdProcessor *sshd.SshdProcessor
+	SshdProcessor sshd.SshdProcessor
 }
 
 // Read reads from /var/log/secure and processes the lines into
