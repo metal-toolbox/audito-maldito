@@ -19,9 +19,6 @@ func TestIngest(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	pipePath := fmt.Sprintf("%s/named-pipe", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-	}()
 	err := syscall.Mkfifo(pipePath, 0o664)
 	if err != nil {
 		assert.Error(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
