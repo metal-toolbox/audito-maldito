@@ -705,6 +705,7 @@ func TestUser_ToAuditEvent(t *testing.T) {
 	assert.Equal(t, ae.Summary.Action, event.Metadata.Extra["action"])
 	assert.Equal(t, ae.Summary.How, event.Metadata.Extra["how"])
 	assert.Equal(t, ae.Summary.Object, event.Metadata.Extra["object"])
+	assert.NotNil(t, event.Metadata.Extra["object"])
 	assert.Equal(t, ae.Process.Args, event.Metadata.Extra["process_args"])
 	assert.Len(t, event.Subjects, len(u.login.Source.Subjects))
 	for k, v := range u.login.Source.Subjects {
@@ -750,10 +751,13 @@ func TestUser_ToAuditEvent_Fail(t *testing.T) {
 			},
 			How: "31c066ba0e276681ea0627b037cd80",
 		},
+		Process: aucoalesce.Process{
+			Args: nil,
+		},
 	}
 
 	event := u.toAuditEvent(ae)
-
+	assert.Nil(t, event.Metadata.Extra["process_args"])
 	assert.Equal(t, event.Outcome, auditevent.OutcomeFailed)
 }
 
