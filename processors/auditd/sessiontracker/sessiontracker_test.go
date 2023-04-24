@@ -701,7 +701,7 @@ func TestUser_ToAuditEvent(t *testing.T) {
 	assert.Equal(t, ae.Timestamp, event.LoggedAt)
 	assert.Equal(t, ae.Session, event.Metadata.AuditID)
 
-	assert.Len(t, event.Metadata.Extra, 3)
+	assert.Len(t, event.Metadata.Extra, 4)
 	assert.Equal(t, ae.Summary.Action, event.Metadata.Extra["action"])
 	assert.Equal(t, ae.Summary.How, event.Metadata.Extra["how"])
 	assert.Equal(t, ae.Summary.Object, event.Metadata.Extra["object"])
