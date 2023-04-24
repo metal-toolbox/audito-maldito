@@ -47,7 +47,7 @@ type Processor struct {
 	Health        *health.Health
 	Metrics       *metrics.PrometheusMetricsProvider
 	jr            JournalReader
-	SshdProcessor *sshd.SshdProcessor
+	SshdProcessor sshd.SshdProcessor
 }
 
 func (jp *Processor) getJournalReader() JournalReader {

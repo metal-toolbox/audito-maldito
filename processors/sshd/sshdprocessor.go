@@ -16,6 +16,10 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 )
 
+type SshdProcessor interface {
+	ProcessSshdLogEntry(ctx context.Context, sm SshdLogEntry) error
+}
+
 func NewSshdProcessor(
 	ctx context.Context,
 	logins chan<- common.RemoteUserLogin,
@@ -23,8 +27,8 @@ func NewSshdProcessor(
 	machineID string,
 	eventW *auditevent.EventWriter,
 	m *metrics.PrometheusMetricsProvider,
-) *SshdProcessor {
-	return &SshdProcessor{
+) SshdProcessor {
+	return &SshdProcessorer{
 		ctx:       ctx,
 		logins:    logins,
 		nodeName:  nodeName,
@@ -34,7 +38,7 @@ func NewSshdProcessor(
 	}
 }
 
-type SshdProcessor struct {
+type SshdProcessorer struct {
 	ctx       context.Context //nolint
 	logins    chan<- common.RemoteUserLogin
 	logEntry  string
@@ -46,8 +50,8 @@ type SshdProcessor struct {
 	metrics   *metrics.PrometheusMetricsProvider
 }
 
-func (s *SshdProcessor) ProcessSshdLogEntry(ctx context.Context, sm SshdLogEntry) error {
-	return ProcessEntry(&SshdProcessor{
+func (s *SshdProcessorer) ProcessSshdLogEntry(ctx context.Context, sm SshdLogEntry) error {
+	return ProcessEntry(&SshdProcessorer{
 		ctx:       ctx,
 		logins:    s.logins,
 		logEntry:  sm.Message,
@@ -139,8 +143,8 @@ type SshdLogEntry struct {
 	PID     string
 }
 
-func ProcessEntry(config *SshdProcessor) error {
-	var entryFunc func(*SshdProcessor) error
+func ProcessEntry(config *SshdProcessorer) error {
+	var entryFunc func(*SshdProcessorer) error
 	switch {
 	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
@@ -171,7 +175,7 @@ func addEventInfoForUnknownUser(evt *auditevent.AuditEvent, alg, keySum string) 
 	}
 }
 
-func processAcceptPublicKeyEntry(config *SshdProcessor) error {
+func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 	matches := loginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for identifiers")
@@ -325,7 +329,7 @@ func getCertificateInvalidReason(logentry string) string {
 	return logentry[prefixLen:]
 }
 
-func processCertificateInvalidEntry(config *SshdProcessor) error {
+func processCertificateInvalidEntry(config *SshdProcessorer) error {
 	reason := getCertificateInvalidReason(config.logEntry)
 
 	// TODO(jaosorior): Figure out smart way of getting the source
@@ -384,7 +388,7 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(config *SshdProcessor) error {
+func processNotInAllowUsersEntry(config *SshdProcessorer) error {
 	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for not-in-allow-users")
@@ -425,7 +429,7 @@ func processNotInAllowUsersEntry(config *SshdProcessor) error {
 	return nil
 }
 
-func processInvalidUserEntry(config *SshdProcessor) error {
+func processInvalidUserEntry(config *SshdProcessorer) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got login entry with no regular expression matches for invalid-user")

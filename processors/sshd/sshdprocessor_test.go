@@ -358,7 +358,7 @@ func TestEntryProcessing(t *testing.T) {
 
 			logins := make(chan common.RemoteUserLogin, 1)
 			pprov := metrics.NewPrometheusMetricsProviderForRegisterer(pr)
-			err := ProcessEntry(&SshdProcessor{
+			err := ProcessEntry(&SshdProcessorer{
 				ctx:       ctx,
 				logins:    logins,
 				logEntry:  tt.args.logentry,

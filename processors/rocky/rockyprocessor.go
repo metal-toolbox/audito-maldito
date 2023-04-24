@@ -9,7 +9,7 @@ import (
 )
 
 type RockyProcessor struct {
-	SshdProcessor *sshd.SshdProcessor
+	SshdProcessor *sshd.SshdProcessorer
 }
 
 // pidRE regex matches a sshd log line extracting the procid and message into a match group
