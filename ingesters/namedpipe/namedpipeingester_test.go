@@ -25,7 +25,7 @@ func TestIngest(t *testing.T) {
 	}
 
 	logger := zap.NewExample().Sugar()
-	h := health.NewSingleReadinessHealth("namedpipe")
+	h := health.NewSingleReadinessHealth(namedpipe.NamedPipeProcessorComponentName)
 	np := namedpipe.NewNamedPipeIngester(logger, h)
 
 	ctx := context.Background()

@@ -3,7 +3,6 @@ package namedpipe
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os"
 
 	"go.uber.org/zap"
@@ -60,12 +59,7 @@ func (n *NamedPipeIngester) Ingest(
 	n.Logger.Infof("Successfully opened %s", filePath)
 	defer file.Close()
 
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		return err
-	}
-
-	n.Health.OnReady(fmt.Sprintf("%s-%s", fileInfo.Name(), NamedPipeProcessorComponentName))
+	n.Health.OnReady(NamedPipeProcessorComponentName)
 	r := bufio.NewReader(file)
 
 	for {
