@@ -20,9 +20,7 @@ func TestIngest(t *testing.T) {
 	tmpDir := t.TempDir()
 	pipePath := fmt.Sprintf("%s/named-pipe", tmpDir)
 	err := syscall.Mkfifo(pipePath, 0o664)
-	if err != nil {
-		assert.Error(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
-	}
+	assert.NoError(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 
 	logger := zap.NewExample().Sugar()
 	h := health.NewSingleReadinessHealth(namedpipe.NamedPipeProcessorComponentName)
@@ -49,15 +47,11 @@ func TestIngest(t *testing.T) {
 
 	go func() {
 		file, err := os.OpenFile(pipePath, os.O_WRONLY, os.ModeNamedPipe)
-		if err != nil {
-			assert.Error(t, err, "failed to initialize tests: Could not open %s named pipe", pipePath)
-		}
+		assert.NoError(t, err, "failed to initialize tests: Could not open %s named pipe", pipePath)
 
 		for range []int{0, 1, 2, 3, 4} {
 			_, err := file.WriteString("foo bar\n")
-			if err != nil {
-				assert.Error(t, err, "error writing to pipe %s", pipePath)
-			}
+			assert.NoError(t, err, "error writing to pipe %s", pipePath)
 		}
 	}()
 

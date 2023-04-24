@@ -48,9 +48,7 @@ func TestIngest(t *testing.T) {
 	tmpDir := t.TempDir()
 	pipePath := fmt.Sprintf("%s/secure-pipe", tmpDir)
 	err := syscall.Mkfifo(pipePath, 0o664)
-	if err != nil {
-		assert.Error(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
-	}
+	assert.NoError(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	countChan := make(chan int)
 	expectedPID := "10"
 	h := health.NewSingleReadinessHealth("secure")
@@ -72,15 +70,11 @@ func TestIngest(t *testing.T) {
 
 	go func() {
 		file, err := os.OpenFile(pipePath, os.O_WRONLY, os.ModeNamedPipe)
-		if err != nil {
-			assert.Error(t, err, "failed to initialize tests: Could not open %s named pipe", pipePath)
-		}
+		assert.NoError(t, err, "failed to initialize tests: Could not open %s named pipe", pipePath)
 
 		for range []int{0, 1, 2, 3, 4} {
 			_, err := file.WriteString(fmt.Sprintf("sshd[%s]:", expectedPID) + " foo bar\n")
-			if err != nil {
-				assert.Error(t, err, "error writing to pipe %s", pipePath)
-			}
+			assert.NoError(t, err, "error writing to pipe %s", pipePath)
 		}
 	}()
 
