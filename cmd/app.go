@@ -60,21 +60,21 @@ type appConfig struct {
 func parseFlags(osArgs []string) (*appConfig, error) {
 	flagSet := flag.NewFlagSet(osArgs[0], flag.ContinueOnError)
 
-	appConfig := &appConfig{
+	config := &appConfig{
 		logLevel: zapcore.InfoLevel,
 	}
 
 	// This is just needed for testing purposes. If it's empty we'll use the current boot ID
-	flagSet.StringVar(&appConfig.bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
-	flagSet.StringVar(&appConfig.auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
-	flagSet.StringVar(&appConfig.auditLogDirPath, "audit-dir-path", "/var/log/audit",
+	flagSet.StringVar(&config.bootID, "boot-id", "", "Optional Linux boot ID to use when reading from the journal")
+	flagSet.StringVar(&config.auditlogpath, "audit-log-path", "/app-audit/audit.log", "Path to the audit log file")
+	flagSet.StringVar(&config.auditLogDirPath, "audit-dir-path", "/var/log/audit",
 		"Path to the Linux audit log directory")
-	flagSet.Var(&appConfig.logLevel, "log-level", "Set the log level according to zapcore.Level")
-	flagSet.BoolVar(&appConfig.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
-	flagSet.BoolVar(&appConfig.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
-	flagSet.DurationVar(&appConfig.httpServerReadTimeout, "http-server-read-timeout",
+	flagSet.Var(&config.logLevel, "log-level", "Set the log level according to zapcore.Level")
+	flagSet.BoolVar(&config.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
+	flagSet.BoolVar(&config.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
+	flagSet.DurationVar(&config.httpServerReadTimeout, "http-server-read-timeout",
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
-	flagSet.DurationVar(&appConfig.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
+	flagSet.DurationVar(&config.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
 		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
 
 	flagSet.Usage = func() {
@@ -87,7 +87,7 @@ func parseFlags(osArgs []string) (*appConfig, error) {
 		return nil, err
 	}
 
-	return appConfig, nil
+	return config, nil
 }
 
 func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig *zap.Config) error {
@@ -145,6 +145,8 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 		return fmt.Errorf("failed to open audit log file: %w", auditfileerr)
 	}
 
+	logger.Infoln("starting workers...")
+
 	handleMetricsAndHealth(groupCtx, appCfg, eg, h)
 
 	logDirReader, err := dirreader.StartLogDirReader(groupCtx, appCfg.auditLogDirPath)
@@ -161,17 +163,13 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 
 	eg.Go(func() error {
 		err := logDirReader.Wait()
-		if logger.Level().Enabled(zap.DebugLevel) {
-			logger.Debugf("linux audit log dir reader worker exited (%v)", err)
-		}
+		logger.Infof("linux audit log dir reader worker exited (%v)", err)
 		return err
 	})
 
 	lastReadJournalTS := lastReadJournalTimeStamp()
 	eventWriter := auditevent.NewDefaultAuditEventWriter(auf)
 	logins := make(chan common.RemoteUserLogin)
-
-	logger.Infoln("starting workers...")
 	pprov := metrics.NewPrometheusMetricsProvider()
 
 	runProcessorsForSSHLogins(groupCtx, logins, eg, distro,
@@ -188,9 +186,7 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 		}
 
 		err := ap.Read(groupCtx)
-		if logger.Level().Enabled(zap.DebugLevel) {
-			logger.Debugf("audit worker exited (%v)", err)
-		}
+		logger.Infof("linux audit worker exited (%v)", err)
 		return err
 	})
 
@@ -227,9 +223,10 @@ func runProcessorsForSSHLogins(
 	//nolint:exhaustive // In this case it's actually simpler to just default to journald
 	switch distro {
 	case util.DistroRocky:
+		h.AddReadiness(varlogsecure.VarLogSecureComponentName)
+
 		// TODO: handle last read timestamp
 		eg.Go(func() error {
-			h.AddReadiness(varlogsecure.VarLogSecureComponentName)
 			vls := varlogsecure.VarLogSecure{
 				L:             logger,
 				Logins:        logins,
@@ -240,16 +237,14 @@ func runProcessorsForSSHLogins(
 				Metrics:       pprov,
 				SshdProcessor: sshdProcessor,
 			}
-			if err := vls.Read(ctx); err != nil {
-				logger.Errorf("varlogsecure worker failed: %v", err)
-				return err
-			}
 
-			logger.Debugf("varlogsecure worker exited")
-			return nil
+			err := vls.Read(ctx)
+			logger.Infof("varlogsecure worker exited (%v)", err)
+			return err
 		})
 	default:
 		h.AddReadiness(journald.JournaldReaderComponentName)
+
 		eg.Go(func() error {
 			jp := journald.Processor{
 				BootID:        bootID,
@@ -265,15 +260,15 @@ func runProcessorsForSSHLogins(
 			}
 
 			err := jp.Read(ctx)
-			if logger.Level().Enabled(zap.DebugLevel) {
-				logger.Debugf("journald worker exited (%v)", err)
-			}
+			logger.Infof("journald worker exited (%v)", err)
 			return err
 		})
 	}
 }
 
-// handleMetricsAndHealth starts a HTTP server on port 2112 to serve metrics and health endpoints.
+// handleMetricsAndHealth starts a HTTP server on port 2112 to serve metrics
+// and health endpoints.
+//
 // If metrics are disabled, the /metrics endpoint will return 404.
 // If health is disabled, the /readyz endpoint will return 404.
 // If both are disabled, the HTTP server will not be started.
@@ -295,9 +290,8 @@ func handleMetricsAndHealth(ctx context.Context, appCfg *appConfig, eg *errgroup
 
 	if appCfg.enableMetrics || appCfg.enableHealthz {
 		eg.Go(func() error {
-			logger.Infoln("Starting HTTP server on :2112")
+			logger.Infof("starting HTTP server on address '%s'...", server.Addr)
 			if err := server.ListenAndServe(); err != nil {
-				logger.Errorf("Failed to start HTTP metrics server: %v", err)
 				return err
 			}
 			return nil
@@ -305,7 +299,7 @@ func handleMetricsAndHealth(ctx context.Context, appCfg *appConfig, eg *errgroup
 
 		eg.Go(func() error {
 			<-ctx.Done()
-			logger.Infoln("Stopping HTTP metrics server")
+			logger.Infoln("stopping HTTP server...")
 			return server.Shutdown(ctx)
 		})
 	}
