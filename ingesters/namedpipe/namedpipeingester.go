@@ -17,7 +17,17 @@ const (
 	NamedPipeProcessorComponentName = "named-pipe-processor"
 )
 
-type NamedPipeIngester struct{}
+func NewNamedPipeIngester(logger *zap.SugaredLogger, h *health.Health) NamedPipeIngester {
+	return NamedPipeIngester{
+		Logger: logger,
+		Health: h,
+	}
+}
+
+type NamedPipeIngester struct {
+	Logger *zap.SugaredLogger
+	Health *health.Health
+}
 
 type Callback func(context.Context, string) error
 
@@ -26,8 +36,6 @@ func (n *NamedPipeIngester) Ingest(
 	filePath string,
 	delim byte,
 	callback Callback,
-	logger *zap.SugaredLogger,
-	h *health.Health,
 ) error {
 	var file *os.File
 	var err error
@@ -49,7 +57,7 @@ func (n *NamedPipeIngester) Ingest(
 		return err
 	}
 
-	logger.Infof("Successfully opened %s", filePath)
+	n.Logger.Infof("Successfully opened %s", filePath)
 	defer file.Close()
 
 	fileInfo, err := os.Stat(filePath)
@@ -57,13 +65,13 @@ func (n *NamedPipeIngester) Ingest(
 		return err
 	}
 
-	h.OnReady(fmt.Sprintf("%s-%s", fileInfo.Name(), NamedPipeProcessorComponentName))
+	n.Health.OnReady(fmt.Sprintf("%s-%s", fileInfo.Name(), NamedPipeProcessorComponentName))
 	r := bufio.NewReader(file)
 
 	for {
 		line, err := r.ReadString(delim)
 		if err != nil {
-			logger.Errorf("error reading from ", file.Name())
+			n.Logger.Errorf("error reading from ", file.Name())
 			return err
 		}
 		err = callback(ctx, line)

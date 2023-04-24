@@ -4,23 +4,30 @@ import (
 	"context"
 	"regexp"
 
-	"go.uber.org/zap"
-
 	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
-	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 )
+
+func NewRockyIngester(
+	filePath string,
+	sshdProcessor sshd.SshdProcessor,
+	namedPipeIngester namedpipe.NamedPipeIngester,
+) RockyIngester {
+	return RockyIngester{
+		FilePath:          filePath,
+		SshdProcessor:     sshdProcessor,
+		namedPipeIngester: namedPipeIngester,
+	}
+}
 
 type RockyIngester struct {
 	namedPipeIngester namedpipe.NamedPipeIngester
 	FilePath          string
 	SshdProcessor     sshd.SshdProcessor
-	Logger            *zap.SugaredLogger
-	Health            *health.Health
 }
 
 func (r *RockyIngester) Ingest(ctx context.Context) error {
-	return r.namedPipeIngester.Ingest(ctx, r.FilePath, '\n', r.Process, r.Logger, r.Health)
+	return r.namedPipeIngester.Ingest(ctx, r.FilePath, '\n', r.Process)
 }
 
 func (r *RockyIngester) Process(ctx context.Context, line string) error {

@@ -7,22 +7,29 @@ package auditlog
 import (
 	"context"
 
-	"go.uber.org/zap"
-
 	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
-	"github.com/metal-toolbox/audito-maldito/internal/health"
 )
+
+func NewAuditLogIngester(
+	filePath string,
+	auditLogChan chan string,
+	namedPipeIngester namedpipe.NamedPipeIngester,
+) AuditLogIngester {
+	return AuditLogIngester{
+		FilePath:          filePath,
+		AuditLogChan:      auditLogChan,
+		namedPipeIngester: namedPipeIngester,
+	}
+}
 
 type AuditLogIngester struct {
 	namedPipeIngester namedpipe.NamedPipeIngester
 	FilePath          string
 	AuditLogChan      chan string
-	Logger            *zap.SugaredLogger
-	Health            *health.Health
 }
 
 func (a *AuditLogIngester) Ingest(ctx context.Context) error {
-	return a.namedPipeIngester.Ingest(ctx, a.FilePath, '\n', a.Process, a.Logger, a.Health)
+	return a.namedPipeIngester.Ingest(ctx, a.FilePath, '\n', a.Process)
 }
 
 func (a *AuditLogIngester) Process(ctx context.Context, line string) error {

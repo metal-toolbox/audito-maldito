@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
+	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
 	"github.com/metal-toolbox/audito-maldito/ingesters/syslog"
 	"github.com/metal-toolbox/audito-maldito/ingesters/syslog/fakes"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
@@ -31,16 +32,15 @@ func TestIngest(t *testing.T) {
 	countChan := make(chan int)
 	expectedPID := "10"
 	h := health.NewSingleReadinessHealth("sshd")
-	sugar := zap.NewExample().Sugar()
+	logger := zap.NewExample().Sugar()
+	namedPipeIngester := namedpipe.NewNamedPipeIngester(logger, h)
+	sli := syslog.NewSyslogIngester(
+		pipePath,
+		&fakes.SshdProcessorFaker{CountChan: countChan, ExpectedPID: expectedPID},
+		namedPipeIngester,
+	)
 
 	ctx := context.Background()
-	sli := syslog.SyslogIngester{
-		FilePath:      pipePath,
-		SshdProcessor: &fakes.SshdProcessorFaker{CountChan: countChan, ExpectedPID: expectedPID},
-		Logger:        sugar,
-		Health:        h,
-	}
-
 	go func() {
 		err := sli.Ingest(ctx)
 		if err != nil {

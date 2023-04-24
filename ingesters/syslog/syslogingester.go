@@ -4,23 +4,30 @@ import (
 	"context"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
-	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 )
+
+func NewSyslogIngester(
+	filePath string,
+	sshdProcessor sshd.SshdProcessor,
+	namedPipeIngester namedpipe.NamedPipeIngester,
+) SyslogIngester {
+	return SyslogIngester{
+		FilePath:          filePath,
+		SshdProcessor:     sshdProcessor,
+		namedPipeIngester: namedPipeIngester,
+	}
+}
 
 type SyslogIngester struct {
 	namedPipeIngester namedpipe.NamedPipeIngester
 	FilePath          string
 	SshdProcessor     sshd.SshdProcessor
-	Logger            *zap.SugaredLogger
-	Health            *health.Health
 }
 
 func (s *SyslogIngester) Ingest(ctx context.Context) error {
-	return s.namedPipeIngester.Ingest(ctx, s.FilePath, '\n', s.Process, s.Logger, s.Health)
+	return s.namedPipeIngester.Ingest(ctx, s.FilePath, '\n', s.Process)
 }
 
 func (s *SyslogIngester) Process(ctx context.Context, line string) error {

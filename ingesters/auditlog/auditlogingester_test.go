@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/metal-toolbox/audito-maldito/ingesters/auditlog"
+	"github.com/metal-toolbox/audito-maldito/ingesters/namedpipe"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 )
 
@@ -29,14 +30,14 @@ func TestIngest(t *testing.T) {
 
 	auditLogChanBufSize := 10000
 	auditLogChan := make(chan string, auditLogChanBufSize)
-	sugar := zap.NewExample().Sugar()
+	logger := zap.NewExample().Sugar()
 	h := health.NewSingleReadinessHealth("auditlog")
-	ali := auditlog.AuditLogIngester{
-		FilePath:     pipePath,
-		AuditLogChan: auditLogChan,
-		Logger:       sugar,
-		Health:       h,
-	}
+	namedPipeIngester := namedpipe.NewNamedPipeIngester(logger, h)
+	ali := auditlog.NewAuditLogIngester(
+		pipePath,
+		auditLogChan,
+		namedPipeIngester,
+	)
 
 	ctx := context.Background()
 	go func() {

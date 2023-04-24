@@ -27,9 +27,9 @@ func TestIngest(t *testing.T) {
 		assert.Error(t, err, "failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	}
 
-	sugar := zap.NewExample().Sugar()
+	logger := zap.NewExample().Sugar()
 	h := health.NewSingleReadinessHealth("namedpipe")
-	np := namedpipe.NamedPipeIngester{}
+	np := namedpipe.NewNamedPipeIngester(logger, h)
 
 	ctx := context.Background()
 	callCount := 0
@@ -44,7 +44,7 @@ func TestIngest(t *testing.T) {
 		return nil
 	}
 	go func() {
-		err := np.Ingest(ctx, pipePath, '\n', callback, sugar, h)
+		err := np.Ingest(ctx, pipePath, '\n', callback)
 		if err != nil {
 			return
 		}
