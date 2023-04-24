@@ -45,11 +45,12 @@ func (n *NamedPipeIngester) Ingest(
 	case <-ready:
 	}
 
-	logger.Infof("Successfully opened %s", filePath)
-
 	if err != nil {
 		return err
 	}
+
+	logger.Infof("Successfully opened %s", filePath)
+	defer file.Close()
 
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
@@ -58,10 +59,6 @@ func (n *NamedPipeIngester) Ingest(
 
 	h.OnReady(fmt.Sprintf("%s-%s", fileInfo.Name(), NamedPipeProcessorComponentName))
 	r := bufio.NewReader(file)
-	go (func() {
-		<-ctx.Done()
-		file.Close()
-	})()
 
 	for {
 		line, err := r.ReadString(delim)
