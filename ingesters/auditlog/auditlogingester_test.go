@@ -16,16 +16,13 @@ import (
 
 func TestIngest(t *testing.T) {
 	t.Parallel()
-	tmpDir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Errorf("failed to initialize tests: Could not create %s dir", tmpDir)
-	}
+	tmpDir := t.TempDir()
 
 	pipePath := fmt.Sprintf("%s/audit-pipe", tmpDir)
 	defer func() {
 		os.RemoveAll(tmpDir)
 	}()
-	err = syscall.Mkfifo(pipePath, 0o664)
+	err := syscall.Mkfifo(pipePath, 0o664)
 	if err != nil {
 		t.Errorf("failed to initialize tests: Could not create %s/%s named pipe", tmpDir, pipePath)
 	}
