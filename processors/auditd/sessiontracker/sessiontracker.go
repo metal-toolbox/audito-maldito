@@ -189,7 +189,7 @@ func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLog
 		err := u.writeAndClearCache(o.eventWriter)
 		if err != nil {
 			return &SessionTrackerError{
-				auditEventFail: true,
+				auditWriteFail: true,
 				message: fmt.Sprintf("failed to write cached events for user '%s' - %s",
 					u.login.CredUserID, err),
 				inner: err,
@@ -199,7 +199,7 @@ func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLog
 		err = o.eventWriter.Write(u.toAuditEvent(event))
 		if err != nil {
 			return &SessionTrackerError{
-				auditEventFail: true,
+				auditWriteFail: true,
 				message:        err.Error(),
 				inner:          err,
 			}
@@ -228,7 +228,7 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 	srcPID, err := strconv.Atoi(event.Process.PID)
 	if err != nil {
 		return &SessionTrackerError{
-			auditEventFail: true,
+			parsePIDFail: true,
 			message: fmt.Sprintf("failed to parse audit session init event pid for session id '%s' ('%s') - %s",
 				event.Session, event.Process.PID, err),
 			inner: err,
@@ -253,7 +253,7 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 			err = o.eventWriter.Write(u.toAuditEvent(event))
 			if err != nil {
 				return &SessionTrackerError{
-					auditEventFail: true,
+					auditWriteFail: true,
 					message:        err.Error(),
 					inner:          err,
 				}

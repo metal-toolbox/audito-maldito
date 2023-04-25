@@ -147,8 +147,8 @@ func TestAuditd_Read_AuditEventWriterError(t *testing.T) {
 
 	assert.ErrorAs(t, err, &expErr)
 
-	if !expErr.AuditEventFailed() {
-		t.Fatal("expected audit event fail to be true - it is false")
+	if !expErr.AuditEventWriteFailed() {
+		t.Fatal("expected audit event write fail to be true - it is false")
 	}
 
 	assert.ErrorIs(t, err, expInnerErr)
