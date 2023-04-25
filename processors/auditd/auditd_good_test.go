@@ -193,10 +193,9 @@ func TestAuditd_Read_GoodAuditdEventsFirst(t *testing.T) {
 //	r1: allowWrites - a function that, when executed, will start
 //	                  reading lines from the slice
 //
-//	r2: writesDone - a channel that is either written to when
-//	                 if an error occurs (such as ctx being
-//	                 cancelled) or is closed when all lines
-//	                 have been written to the lines channel
+//	r2: writesDone - a channel that receives an error if one occurs
+//	                 (such as ctx being cancelled) and is closed when
+//	                 all lines have been written to the lines channel
 func newTestLogReader(
 	ctx context.Context,
 	lineSetsToSend []string,
