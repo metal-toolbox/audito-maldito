@@ -2,7 +2,8 @@ package sessiontracker
 
 type SessionTrackerError struct {
 	remoteLoginFail bool
-	auditEventFail  bool
+	parsePIDFail    bool
+	auditWriteFail  bool
 	message         string
 	inner           error
 }
@@ -11,8 +12,12 @@ func (o *SessionTrackerError) RemoteLoginFailed() bool {
 	return o.remoteLoginFail
 }
 
-func (o *SessionTrackerError) AuditEventFailed() bool {
-	return o.auditEventFail
+func (o *SessionTrackerError) ParsePIDFailed() bool {
+	return o.parsePIDFail
+}
+
+func (o *SessionTrackerError) AuditEventWriteFailed() bool {
+	return o.auditWriteFail
 }
 
 func (o *SessionTrackerError) Error() string {

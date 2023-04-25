@@ -508,8 +508,9 @@ func TestSessionTracker_AuditdEvent_CreateSession_BadPID(t *testing.T) {
 
 	err := st.AuditdEvent(initialEvent)
 
-	var exp *strconv.NumError
+	var exp *SessionTrackerError
 	assert.ErrorAs(t, err, &exp)
+	assert.True(t, exp.ParsePIDFailed())
 }
 
 func TestSessionTracker_AuditdEvent_CreateSession_WithRUL(t *testing.T) {
