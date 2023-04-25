@@ -33,9 +33,6 @@ func NewSessionTracker(eventWriter *auditevent.EventWriter, l *zap.SugaredLogger
 // sessionTracker tracks both remote user logins and auditd sessions,
 // allowing us to correlate auditd events back to the credential
 // a user used to authenticate.
-//
-// This struct's methods are not thread-safe (i.e., they are intended
-// to be called by a single Go routine).
 type sessionTracker struct {
 	// sessIDsToUsers contains active auditd sessions which may
 	// or may not have a common.RemoteUserLogin associated with
