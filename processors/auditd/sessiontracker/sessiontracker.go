@@ -375,6 +375,10 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 		"object": ae.Summary.Object,
 	}
 
+	if len(ae.Process.Args) > 0 {
+		evt.Metadata.Extra["process_args"] = ae.Process.Args
+	}
+
 	return evt
 }
 
