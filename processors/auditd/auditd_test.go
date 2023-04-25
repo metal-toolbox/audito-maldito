@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	_ "embed"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func TestAuditd_Read_ParseAuditLogError(t *testing.T) {
 	assert.ErrorAs(t, err, &expErr)
 }
 
-func TestAuditd_Read_AuditEventError(t *testing.T) {
+func TestAuditd_Read_AuditEventWriterError(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
@@ -119,22 +120,19 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 	logins := make(chan common.RemoteUserLogin, 1)
 	logins <- newSshdJournaldAuditEvent("user", goodAuditdSshdPid)
 
-	events := make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents)
-	eventWCtx, cancelEventWFn := context.WithCancel(ctx)
-	defer cancelEventWFn()
+	expInnerErr := errors.New("forced failure")
 
 	a := Auditd{
 		Audits: lines,
 		Logins: logins,
 		EventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
-			Ctx:    eventWCtx,
-			Events: events,
+			Ctx:    ctx,
+			Err:    expInnerErr,
+			Events: make(chan *auditevent.AuditEvent, goodAuditdMaxResultingEvents),
 			T:      t,
 		}),
 		Health: health.NewSingleReadinessHealth(AuditdProcessorComponentName),
 	}
-
-	cancelEventWFn()
 
 	errs := make(chan error, 1)
 	go func() {
@@ -152,6 +150,8 @@ func TestAuditd_Read_AuditEventError(t *testing.T) {
 	if !expErr.AuditEventFailed() {
 		t.Fatal("expected audit event fail to be true - it is false")
 	}
+
+	assert.ErrorIs(t, err, expInnerErr)
 }
 
 func TestMaintainReassemblerLoop_Cancel(t *testing.T) {

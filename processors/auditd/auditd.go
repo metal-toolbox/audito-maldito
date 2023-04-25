@@ -58,8 +58,9 @@ type Auditd struct {
 	Health *health.Health
 }
 
-// TODO: Write documentation about creating a splunk query that shows
-// only events after a user-start.
+// Read reads Linux audit messages from Auditd.Logins, parsing them into
+// Linux audit messages. It correlates the Linux audit events and their
+// session IDs with remote user logins sourced from Auditd.Logins.
 func (o *Auditd) Read(ctx context.Context) error {
 	reassemblerErrors := make(chan error, 1)
 	tracker := sessiontracker.NewSessionTracker(o.EventW, logger)
