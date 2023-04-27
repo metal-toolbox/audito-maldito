@@ -157,11 +157,17 @@ func ProcessEntry(config *SshdProcessorer) error {
 	}
 
 	if entryFunc != nil {
-		logger.Infof("log line did match predefined regex, line: %s", config.logEntry)
+		if logger.Level().Enabled(zap.DebugLevel) {
+			logger.Debugf("sshd log line matched regex, line: '%s'", config.logEntry)
+		}
+
 		return entryFunc(config)
 	}
-	logger.Infof("log line did not match any predefined regex, line: %s", config.logEntry)
-	// TODO(jaosorior): Should we log the entry if it didn't match?
+
+	if logger.Level().Enabled(zap.DebugLevel) {
+		logger.Debugf("sshd log line did not match any regex, line: '%s'", config.logEntry)
+	}
+
 	return nil
 }
 
