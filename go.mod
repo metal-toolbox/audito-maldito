@@ -8,7 +8,7 @@ require (
 	github.com/elastic/go-libaudit/v2 v2.3.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/zapr v1.2.3
-	github.com/metal-toolbox/auditevent v0.7.0
+	github.com/metal-toolbox/auditevent v0.8.0
 	github.com/nxadm/tail v1.4.8
 	github.com/prometheus/client_golang v1.15.0
 	github.com/stretchr/testify v1.8.2
@@ -22,7 +22,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
