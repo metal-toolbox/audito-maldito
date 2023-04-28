@@ -46,7 +46,7 @@ const (
 	// DefaultHTTPServerReadHeaderTimeout is the default HTTP server read header timeout.
 	DefaultHTTPServerReadHeaderTimeout = 5 * time.Second
 	// DefaultAuditCheckInterval when to check audit.log modify time.
-	DefaultAuditCheckInterval = 15
+	DefaultAuditCheckInterval = 15 * time.Second
 	// DefaultAuditModifyTimeThreshold seconds since last write to audit.log before alerting.
 	DefaultAuditModifyTimeThreshold = 86400
 )
@@ -58,7 +58,7 @@ type appConfig struct {
 	enableMetrics                    bool
 	enableHealthz                    bool
 	enableAuditMetrics               bool
-	auditMetricsSecondsInterval      int
+	auditMetricsSecondsInterval      time.Duration
 	auditLogWriteTimeSecondThreshold int
 	httpServerReadTimeout            time.Duration
 	httpServerReadHeaderTimeout      time.Duration
@@ -85,7 +85,7 @@ func parseFlags(osArgs []string) (*appConfig, error) {
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
 	flagSet.DurationVar(&config.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
 		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
-	flagSet.IntVar(
+	flagSet.DurationVar(
 		&config.auditMetricsSecondsInterval,
 		"audit-seconds-interval",
 		DefaultAuditCheckInterval,
@@ -357,7 +357,7 @@ func handleAuditLogMetrics(
 	ctx context.Context,
 	eg *errgroup.Group,
 	pprov *metrics.PrometheusMetricsProvider,
-	auditMetricsSecondsInterval int,
+	auditMetricsSecondsInterval time.Duration,
 	auditLogWriteTimeSecondThreshold int,
 	enableAuditMetrics bool,
 ) {
@@ -368,7 +368,7 @@ func handleAuditLogMetrics(
 	auditLogFilePath := "/var/log/audit/audit.log"
 
 	eg.Go(func() error {
-		tickChan := time.NewTicker(time.Second * time.Duration(auditMetricsSecondsInterval)).C
+		tickChan := time.NewTicker(auditMetricsSecondsInterval).C
 		for {
 			select {
 			case <-tickChan:
