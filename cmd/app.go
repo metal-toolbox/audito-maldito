@@ -368,10 +368,12 @@ func handleAuditLogMetrics(
 	auditLogFilePath := "/var/log/audit/audit.log"
 
 	eg.Go(func() error {
-		tickChan := time.NewTicker(auditMetricsSecondsInterval).C
+		ticker := time.NewTicker(auditMetricsSecondsInterval)
+		defer ticker.Stop()
+
 		for {
 			select {
-			case <-tickChan:
+			case <-ticker.C:
 				s, err := os.Stat(auditLogFilePath)
 				if err != nil {
 					logger.Errorf("error stat-ing %s", auditLogFilePath)
