@@ -52,6 +52,8 @@ type appConfig struct {
 	auditLogDirPath             string
 	enableMetrics               bool
 	enableHealthz               bool
+	enableAuditMetrics          bool
+	auditMetricsSecondsInterval int
 	httpServerReadTimeout       time.Duration
 	httpServerReadHeaderTimeout time.Duration
 	logLevel                    zapcore.Level
@@ -72,6 +74,9 @@ func parseFlags(osArgs []string) (*appConfig, error) {
 	flagSet.Var(&config.logLevel, "log-level", "Set the log level according to zapcore.Level")
 	flagSet.BoolVar(&config.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.BoolVar(&config.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
+	flagSet.BoolVar(&config.enableAuditMetrics, "auditMetrics", false, "Enable Prometheus audit.log metrics")
+	flagSet.IntVar(&config.auditMetricsSecondsInterval, "audit-seconds-interval", 15, "Number of seconds to collect audit metrics")
+	flagSet.IntVar(&config.auditLogLastModifyInterval, "audit-log-last-modify-interval", false, "Number of seconds to collect audit metrics")
 	flagSet.DurationVar(&config.httpServerReadTimeout, "http-server-read-timeout",
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
 	flagSet.DurationVar(&config.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
@@ -325,4 +330,22 @@ func lastReadJournalTimeStamp() uint64 {
 	}
 
 	return lastRead
+}
+
+func collectAuditLogMetrics(
+	eg *errgroup.Group,
+	pprov *metrics.PrometheusMetricsProvider,
+	auditMetricsSecondsInterval int,
+) {
+	eg.Go(func() error {
+		tickChan := time.NewTicker(time.Second * time.Duration(auditMetricsSecondsInterval)).C
+		for {
+			select {
+			case <-tickChan:
+
+			}
+		}
+
+		return nil
+	})
 }
