@@ -374,7 +374,8 @@ func handleAuditLogMetrics(
 			case <-tickChan:
 				s, err := os.Stat(auditLogFilePath)
 				if err != nil {
-					return fmt.Errorf("error stat-ing %s", auditLogFilePath)
+					logger.Errorf("error stat-ing %s", auditLogFilePath)
+					continue
 				}
 
 				if time.Since(s.ModTime()).Seconds() > float64(auditLogWriteTimeSecondThreshold) {
