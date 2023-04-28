@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/zapr"
@@ -47,16 +48,17 @@ const (
 )
 
 type appConfig struct {
-	bootID                      string
-	auditlogpath                string
-	auditLogDirPath             string
-	enableMetrics               bool
-	enableHealthz               bool
-	enableAuditMetrics          bool
-	auditMetricsSecondsInterval int
-	httpServerReadTimeout       time.Duration
-	httpServerReadHeaderTimeout time.Duration
-	logLevel                    zapcore.Level
+	bootID                           string
+	auditlogpath                     string
+	auditLogDirPath                  string
+	enableMetrics                    bool
+	enableHealthz                    bool
+	enableAuditMetrics               bool
+	auditMetricsSecondsInterval      int
+	auditLogWriteTimeSecondThreshold int
+	httpServerReadTimeout            time.Duration
+	httpServerReadHeaderTimeout      time.Duration
+	logLevel                         zapcore.Level
 }
 
 func parseFlags(osArgs []string) (*appConfig, error) {
@@ -75,12 +77,20 @@ func parseFlags(osArgs []string) (*appConfig, error) {
 	flagSet.BoolVar(&config.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.BoolVar(&config.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
 	flagSet.BoolVar(&config.enableAuditMetrics, "auditMetrics", false, "Enable Prometheus audit.log metrics")
-	flagSet.IntVar(&config.auditMetricsSecondsInterval, "audit-seconds-interval", 15, "Number of seconds to collect audit metrics")
-	flagSet.IntVar(&config.auditLogLastModifyInterval, "audit-log-last-modify-interval", false, "Number of seconds to collect audit metrics")
 	flagSet.DurationVar(&config.httpServerReadTimeout, "http-server-read-timeout",
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
 	flagSet.DurationVar(&config.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
 		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
+	flagSet.IntVar(
+		&config.auditMetricsSecondsInterval,
+		"audit-seconds-interval",
+		15,
+		"Number of seconds to collect audit metrics")
+	flagSet.IntVar(
+		&config.auditLogWriteTimeSecondThreshold,
+		"audit-log-last-modify-seconds-threshold",
+		86400,
+		"maximum second diff between current date and last modify time")
 
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
@@ -177,6 +187,11 @@ func Run(ctx context.Context, osArgs []string, h *health.Health, optLoggerConfig
 	logins := make(chan common.RemoteUserLogin)
 	pprov := metrics.NewPrometheusMetricsProvider()
 
+	handleAuditLogMetrics(groupCtx, eg,
+		pprov,
+		appCfg.auditMetricsSecondsInterval,
+		appCfg.auditLogWriteTimeSecondThreshold,
+	)
 	runProcessorsForSSHLogins(groupCtx, logins, eg, distro,
 		mid, nodename, appCfg.bootID, lastReadJournalTS, eventWriter, h, pprov)
 
@@ -332,20 +347,34 @@ func lastReadJournalTimeStamp() uint64 {
 	return lastRead
 }
 
-func collectAuditLogMetrics(
+func handleAuditLogMetrics(
+	ctx context.Context,
 	eg *errgroup.Group,
 	pprov *metrics.PrometheusMetricsProvider,
 	auditMetricsSecondsInterval int,
+	auditLogWriteTimeSecondThreshold int,
 ) {
+
 	eg.Go(func() error {
 		tickChan := time.NewTicker(time.Second * time.Duration(auditMetricsSecondsInterval)).C
 		for {
 			select {
 			case <-tickChan:
+				s, err := os.Stat("/var/log/audit/audit.log")
+				if err != nil {
+					return fmt.Errorf("error stat-ing /var/log/audit/audit.log")
+				}
 
+				if time.Now().Sub(s.ModTime()).Seconds() > float64(auditLogWriteTimeSecondThreshold) {
+					pprov.SetAuditLogCheck(0, strconv.Itoa(auditLogWriteTimeSecondThreshold))
+				} else {
+					pprov.SetAuditLogCheck(1, strconv.Itoa(auditLogWriteTimeSecondThreshold))
+				}
+
+				pprov.SetAuditLogModifyTime(float64(s.ModTime().Unix()))
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
-
-		return nil
 	})
 }
