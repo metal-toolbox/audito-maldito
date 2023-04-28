@@ -355,14 +355,16 @@ func handleAuditLogMetrics(
 	auditLogWriteTimeSecondThreshold int,
 ) {
 
+	auditLogFilePath := "/var/log/audit/audit.log"
+
 	eg.Go(func() error {
 		tickChan := time.NewTicker(time.Second * time.Duration(auditMetricsSecondsInterval)).C
 		for {
 			select {
 			case <-tickChan:
-				s, err := os.Stat("/var/log/audit/audit.log")
+				s, err := os.Stat(auditLogFilePath)
 				if err != nil {
-					return fmt.Errorf("error stat-ing /var/log/audit/audit.log")
+					return fmt.Errorf("error stat-ing %s", auditLogFilePath)
 				}
 
 				if time.Now().Sub(s.ModTime()).Seconds() > float64(auditLogWriteTimeSecondThreshold) {
