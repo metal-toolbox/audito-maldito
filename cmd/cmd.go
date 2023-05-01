@@ -9,6 +9,11 @@ import (
 	"time"
 
 	"github.com/metal-toolbox/auditevent"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/metal-toolbox/audito-maldito/ingesters/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
@@ -16,10 +21,6 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/util"
 	"github.com/metal-toolbox/audito-maldito/processors/sshd"
 	"github.com/metal-toolbox/audito-maldito/processors/varlogsecure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"golang.org/x/sync/errgroup"
 )
 
 const usage = `audito-maldito
