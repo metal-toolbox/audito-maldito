@@ -3,11 +3,19 @@ package sshd
 import "regexp"
 
 var (
-	// loginRE matches the sshd login log message, allowing us to
-	// extract information about the login attempt. At a minimum, it
-	// should support the characters that "adduser" on Debian-based
-	// systems cares about. For example, here is what "adduser"
-	// says when given an invalid user name string:
+	// loginRE matches the sshd "accepted" log message, allowing us
+	// to extract information about the login attempt. This message
+	// is also generated for "Failed", "Postponed", and "Partial"
+	// authentication outcomes. Note that only certain permutations
+	// of the log message appear when using the default LogLevel.
+	// For example, the "Failed" outcome of the log message
+	// does not occur for public keys or certificates unless
+	// LogLevel is set to VERBOSE.
+	//
+	// At a minimum, the "Username" substring part of the regex
+	// must support the character set that "adduser" supports on
+	// Debian-based systems. For example, here is what "adduser"
+	// says when given an invalid username string:
 	//
 	//	# adduser /foo/
 	//	adduser: To avoid problems, the username should consist
@@ -18,7 +26,35 @@ var (
 	//
 	// It should also support unicode characters.
 	//
+	// Examples:
+	//
+	// 	(Note, each example is broken out over multiple lines.
+	// 	 Replace indented newlines with a single space)
+	//
+	//	Accepted publickey for auditomalditotesting from 127.0.0.1 port 50482 ssh2:
+	//	    ED25519-CERT SHA256:YI+caZKJCNaXgsD0NvRZ2fLaEeF46cEVyadru/SL76o
+	//	    ID foo@bar.com (serial 0) CA ED25519 SHA256:Pcs5TWfcOSKb7Rw/XyvHfUcaQzmw6HtLrjUoyXuzIj8
+	//
+	//	Failed publickey for auditomalditotesting from 127.0.0.1 port 38234 ssh2:
+	//	    ED25519 SHA256:frGtfUnZ8huEWJjAGnmLsmCqE0to2nuvfP4qhIUIUaI
+	//
+	//	Failed publickey for auditomalditotesting from 127.0.0.1 port 38656 ssh2:
+	//	    ED25519-CERT SHA256:frGtfUnZ8huEWJjAGnmLsmCqE0to2nuvfP4qhIUIUaI
+	//	    ID foo (serial 0) CA ED25519 SHA256:3PCaZkpmyZdYJSgpa2xv4wJiLmLPj1Y8oFgfrON7vJE
+	//
 	// From auth.c:
+	//
+	//	if (authctxt->postponed)
+	//	    authmsg = "Postponed";
+	//	else if (partial)
+	//	    authmsg = "Partial";
+	//	else
+	//	    authmsg = authenticated ? "Accepted" : "Failed";
+	//
+	//	if ((extra = format_method_key(authctxt)) == NULL) {
+	//	    if (authctxt->auth_method_info != NULL)
+	//	        extra = xstrdup(authctxt->auth_method_info);
+	//	}
 	//
 	//	do_log2(level, "%s %s%s%s for %s%.100s from %.200s port %d ssh2%s%s"
 	//	    authmsg,
