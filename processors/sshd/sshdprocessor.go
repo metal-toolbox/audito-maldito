@@ -363,47 +363,6 @@ func extraDataForInvalidCert(reason string) (*json.RawMessage, error) {
 	return &rawmsg, err
 }
 
-func processNotInAllowUsersEntry(config *SshdProcessorer) error {
-	matches := notInAllowUsersRE.FindStringSubmatch(config.logEntry)
-	if matches == nil {
-		logger.Infoln("got login entry with no regular expression matches for not-in-allow-users")
-		return nil
-	}
-
-	usrIdx := notInAllowUsersRE.SubexpIndex(idxLoginUserName)
-	sourceIdx := notInAllowUsersRE.SubexpIndex(idxLoginSource)
-
-	evt := auditevent.NewAuditEvent(
-		common.ActionLoginIdentifier,
-		auditevent.EventSource{
-			Type:  "IP",
-			Value: matches[sourceIdx],
-		},
-		auditevent.OutcomeFailed,
-		map[string]string{
-			"loggedAs": matches[usrIdx],
-			"userID":   common.UnknownUser,
-			"pid":      config.pid,
-		},
-		"sshd",
-	).WithTarget(map[string]string{
-		"host":       config.nodeName,
-		"machine-id": config.machineID,
-	})
-
-	// Increment metric even if it fails to write the event
-	config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
-
-	evt.LoggedAt = config.when
-	if err := config.eventW.Write(evt); err != nil {
-		// NOTE(jaosorior): Not being able to write audit events
-		// merits us error-ing here.
-		return fmt.Errorf("failed to write event: %w", err)
-	}
-
-	return nil
-}
-
 func processInvalidUserEntry(config *SshdProcessorer) error {
 	matches := invalidUserRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
