@@ -119,10 +119,35 @@ func ProcessEntry(config *SshdProcessorer) error {
 		entryFunc = processAcceptPublicKeyEntry
 	case strings.HasPrefix(config.logEntry, "Certificate invalid"):
 		entryFunc = processCertificateInvalidEntry
-	case strings.HasSuffix(config.logEntry, "not allowed because not listed in AllowUsers"):
-		entryFunc = processNotInAllowUsersEntry
 	case strings.HasPrefix(config.logEntry, "Invalid user"):
 		entryFunc = processInvalidUserEntry
+	case strings.HasPrefix(config.logEntry, "User "):
+		entryFunc = userTypeLogAuditFn(config)
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case rootLoginRefusedRE.MatchString(config.logEntry):
+		entryFunc = rootLoginRefused
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case badOwnerOrModesForHostFileRE.MatchString(config.logEntry):
+		entryFunc = badOwnerOrModesForHostFile
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case nastyPTRRecordRE.MatchString(config.logEntry):
+		entryFunc = nastyPTRRecord
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case reverseMappingCheckFailedRE.MatchString(config.logEntry):
+		entryFunc = reverseMappingCheckFailed
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case doesNotMapBackToAddrRE.MatchString(config.logEntry):
+		entryFunc = doesNotMapBackToAddr
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case maxAuthAttemptsExceededRE.MatchString(config.logEntry):
+		entryFunc = maxAuthAttemptsExceeded
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case revokedPublicKeyByFileRE.MatchString(config.logEntry):
+		entryFunc = revokedPublicKeyByFile
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case revokedPublicKeyByFileErrRE.MatchString(config.logEntry):
+		entryFunc = revokedPublicKeyByFileErr
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 	}
 
 	if entryFunc != nil {
