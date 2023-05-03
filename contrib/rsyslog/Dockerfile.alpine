@@ -1,0 +1,8 @@
+FROM alpine:3.17.3
+RUN apk update
+RUN apk upgrade
+RUN apk add rsyslog
+RUN mkdir /etc/rsyslog.d
+COPY config/rsyslog.d/* /etc/rsyslog.d/
+COPY config/rsyslog.conf /etc/rsyslog.conf
+ENTRYPOINT ["rsyslogd" ,"-n"]
