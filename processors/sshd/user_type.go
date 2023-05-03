@@ -234,7 +234,7 @@ func userGroupNotListedInAllowGroups(config *SshdProcessorer) error {
 	return nil
 }
 
-func userLogToAuditEvent(username string, source string, config *SshdProcessorer) *auditevent.AuditEvent {
+func userLogToAuditEvent(username, source string, config *SshdProcessorer) *auditevent.AuditEvent {
 	evt := auditevent.NewAuditEvent(
 		common.ActionLoginIdentifier,
 		auditevent.EventSource{

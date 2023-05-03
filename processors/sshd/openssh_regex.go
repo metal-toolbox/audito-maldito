@@ -81,7 +81,7 @@ var (
 	//	Failed password for auditomalditotesting from 127.0.0.1 port 45082 ssh2
 	//
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
-	failedPasswordAuthRE = regexp.MustCompile("^Failed password for (?P<Username>\\S+) from (?P<Source>\\S+) port (?P<Port>\\d+) ssh[[:alnum:]]+$")
+	failedPasswordAuthRE = regexp.MustCompile(`^Failed password for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+$`)
 
 	// certIDRE matches the sshd user-certificate log message,
 	// allowing us to extract information about the user's
@@ -128,7 +128,7 @@ var (
 	//	   "does not exist", pw->pw_name, shell);
 	//
 	//nolint:lll // This is a long regex
-	userNonExistentShellRE = regexp.MustCompile("^User (?P<Username>\\S+) not allowed because shell (?P<Shell>\\S+) does not exist$")
+	userNonExistentShellRE = regexp.MustCompile(`^User (?P<Username>\S+) not allowed because shell (?P<Shell>\S+) does not exist$`)
 
 	// userNonExecutableShellRE matches an OpenSSH log message that
 	// occurs when the user's shell is not executable.
@@ -139,7 +139,7 @@ var (
 	//	   "is not executable", pw->pw_name, shell);
 	//
 	//nolint:lll // This is a long regex
-	userNonExecutableShellRE = regexp.MustCompile("^User (?P<Username>\\S+) not allowed because shell (?P<Shell>\\S+) is not executable$")
+	userNonExecutableShellRE = regexp.MustCompile(`^User (?P<Username>\S+) not allowed because shell (?P<Shell>\S+) is not executable$`)
 
 	// userInDenyUsersRE matches an OpenSSH log message that occurs
 	// when the user is listed in DenyUsers.
@@ -153,7 +153,7 @@ var (
 	//	   pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userInDenyUsersRE = regexp.MustCompile("^User (?P<Username>\\S+) from (?P<Source>\\S+) not allowed because listed in DenyUsers$")
+	userInDenyUsersRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because listed in DenyUsers$`)
 
 	// userNotInAnyGroupRE matches an OpenSSH log message that
 	// occurs when the user is not in any group.
@@ -164,7 +164,7 @@ var (
 	//	   "not in any group", pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userNotInAnyGroupRE = regexp.MustCompile("^User (?P<Username>\\S+) from (?P<Source>\\S+) not allowed because not in any group$")
+	userNotInAnyGroupRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because not in any group$`)
 
 	// userGroupInDenyGroupsRE matches an OpenSSH log message that
 	// occurs when the user's group is listed in DenyUsers.
@@ -178,7 +178,7 @@ var (
 	//	   pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userGroupInDenyGroupsRE = regexp.MustCompile("^User (?P<Username>\\S+) from (?P<Source>\\S+) not allowed because a group is listed in DenyGroups$")
+	userGroupInDenyGroupsRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because a group is listed in DenyGroups$`)
 
 	// userGroupNotListedInAllowGroupsRE matches an OpenSSH log
 	// message that occurs when none of the user's groups appear
@@ -193,7 +193,7 @@ var (
 	//	    "in AllowGroups", pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userGroupNotListedInAllowGroupsRE = regexp.MustCompile("^User (?P<Username>\\S+) from (?P<Source>\\S+) not allowed because none of user's groups are listed in AllowGroups$")
+	userGroupNotListedInAllowGroupsRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because none of user's groups are listed in AllowGroups$`)
 
 	// rootLoginRefusedRE matches an OpenSSH log message that occurs
 	// when a root user login attempt fails.
@@ -202,9 +202,7 @@ var (
 	//
 	//	logit("ROOT LOGIN REFUSED FROM %.200s port %d",
 	//	    ssh_remote_ipaddr(ssh), ssh_remote_port(ssh));
-	//
-	//nolint:lll // This is a long regex
-	rootLoginRefusedRE = regexp.MustCompile("^ROOT LOGIN REFUSED FROM (?P<Source>\\S+) port (?P<Port>\\d+)$")
+	rootLoginRefusedRE = regexp.MustCompile(`^ROOT LOGIN REFUSED FROM (?P<Source>\S+) port (?P<Port>\d+)$`)
 
 	// badOwnerOrModesForHostFileRE matches an OpenSSH log message
 	// that occurs when a user's authorized_keys file has incorrect
@@ -217,7 +215,7 @@ var (
 	//	    pw->pw_name, user_hostfile);
 	//
 	//nolint:lll // This is a long regex
-	badOwnerOrModesForHostFileRE = regexp.MustCompile("^Authentication refused for (?P<Username>\\S+): bad owner or modes for (?P<FilePath>\\S+)$")
+	badOwnerOrModesForHostFileRE = regexp.MustCompile(`^Authentication refused for (?P<Username>\S+): bad owner or modes for (?P<FilePath>\S+)$`)
 
 	// nastyPTRRecordRE matches an OpenSSH log message that occurs
 	// when the DNS check yields a bad PTR record.
@@ -228,8 +226,6 @@ var (
 	//
 	//	logit("Nasty PTR record \"%s\" is set up for %s, ignoring",
 	//	    name, ntop);
-	//
-	//nolint:lll // This is a long regex
 	nastyPTRRecordRE = regexp.MustCompile(`^Nasty PTR record "(?P<DNSName>\S+)" is set up for (?P<Source>\S+), ignoring$`)
 
 	// reverseMappingCheckFailedRE matches an OpenSSH log message
@@ -243,7 +239,7 @@ var (
 	//	    "[%s] failed.", name, ntop);
 	//
 	//nolint:lll // This is a long regex
-	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<DNSName>\\S+) \[(?P<Source>\S+)\\] failed.$`)
+	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<DNSName>\S+) \[(?P<Source>\S+)\\] failed.$`)
 
 	// doesNotMapBackToAddrRE matches an OpenSSH log message that
 	// occurs when the reverse DNS lookup yields a record that does
@@ -257,7 +253,7 @@ var (
 	//	    "map back to the address.", ntop, name);
 	//
 	//nolint:lll // This is a long regex
-	doesNotMapBackToAddrRE = regexp.MustCompile("^Address (?P<Source>\\S+) maps to (?P<DNSName>\\S+), but this does not map back to the address.$")
+	doesNotMapBackToAddrRE = regexp.MustCompile(`^Address (?P<Source>\S+) maps to (?P<DNSName>\S+), but this does not map back to the address.$`)
 
 	// maxAuthAttemptsExceededRE matches an OpenSSH log message that
 	// occurs when the maximum authentication attempt limit is exceeded
@@ -273,7 +269,7 @@ var (
 	//	    ssh_remote_port(ssh));
 	//
 	//nolint:lll // This is a long regex
-	maxAuthAttemptsExceededRE = regexp.MustCompile("^authentication attempts exceeded for (?P<Username>\\S+) from (?P<Source>\\S+) port (?P<Port>\\d+) ssh2$")
+	maxAuthAttemptsExceededRE = regexp.MustCompile(`^authentication attempts exceeded for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh2$`)
 
 	// revokedPublicKeyByFileRE matches an OpenSSH log message that
 	// occurs when the client's public key appears in the file named
@@ -287,7 +283,7 @@ var (
 	//	    sshkey_type(key), fp, options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileRE = regexp.MustCompile("^Authentication key (?P<SSHKeyType>\\S+) (?P<SSHKeyFingerprint>\\S+) revoked by file (?P<FilePath>\\S+)$")
+	revokedPublicKeyByFileRE = regexp.MustCompile(`^Authentication key (?P<SSHKeyType>\S+) (?P<SSHKeyFingerprint>\S+) revoked by file (?P<FilePath>\S+)$`)
 
 	// revokedPublicKeyByFileErrRE matches an OpenSSH log message that
 	// occurs when checking a client's public key against the file named
@@ -302,5 +298,5 @@ var (
 	//	    options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileErrRE = regexp.MustCompile("^Error checking authentication key (?P<Type>\\S+) (?P<SSHKeyFingerprint>\\S+) in revoked keys file (?P<FilePath>\\S+)$")
+	revokedPublicKeyByFileErrRE = regexp.MustCompile(`^Error checking authentication key (?P<Type>\S+) (?P<SSHKeyFingerprint>\S+) in revoked keys file (?P<FilePath>\S+)$`)
 )
