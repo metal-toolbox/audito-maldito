@@ -204,7 +204,7 @@ var (
 	//	    ssh_remote_ipaddr(ssh), ssh_remote_port(ssh));
 	//
 	//nolint:lll // This is a long regex
-	rootLoginRefusedRE = regexp.MustCompile("^ROOT LOGIN REFUSED FROM (?P<IP>\\S+) port (?P<Port>\\d+)$")
+	rootLoginRefusedRE = regexp.MustCompile("^ROOT LOGIN REFUSED FROM (?P<Source>\\S+) port (?P<Port>\\d+)$")
 
 	// badOwnerOrModesForHostFileRE matches an OpenSSH log message
 	// that occurs when a user's authorized_keys file has incorrect
@@ -230,7 +230,7 @@ var (
 	//	    name, ntop);
 	//
 	//nolint:lll // This is a long regex
-	nastyPTRRecordRE = regexp.MustCompile(`^Nasty PTR record "(?P<Record>\S+)" is set up for (?P<Source>\S+), ignoring$`)
+	nastyPTRRecordRE = regexp.MustCompile(`^Nasty PTR record "(?P<DNSName>\S+)" is set up for (?P<Source>\S+), ignoring$`)
 
 	// reverseMappingCheckFailedRE matches an OpenSSH log message
 	// that occurs when the reverse DNS lookup fails.
@@ -243,7 +243,7 @@ var (
 	//	    "[%s] failed.", name, ntop);
 	//
 	//nolint:lll // This is a long regex
-	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<Name>\\S+) \[(?P<Source>\S+)\\] failed.$`)
+	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<DNSName>\\S+) \[(?P<Source>\S+)\\] failed.$`)
 
 	// doesNotMapBackToAddrRE matches an OpenSSH log message that
 	// occurs when the reverse DNS lookup yields a record that does
@@ -257,9 +257,9 @@ var (
 	//	    "map back to the address.", ntop, name);
 	//
 	//nolint:lll // This is a long regex
-	doesNotMapBackToAddrRE = regexp.MustCompile("^Address (?P<Source>\\S+) maps to (?P<Name>\\S+), but this does not map back to the address.$")
+	doesNotMapBackToAddrRE = regexp.MustCompile("^Address (?P<Source>\\S+) maps to (?P<DNSName>\\S+), but this does not map back to the address.$")
 
-	// maxAuthAttemptsExceedRE matches an OpenSSH log message that
+	// maxAuthAttemptsExceededRE matches an OpenSSH log message that
 	// occurs when the maximum authentication attempt limit is exceeded
 	// by the client.
 	//
@@ -273,7 +273,7 @@ var (
 	//	    ssh_remote_port(ssh));
 	//
 	//nolint:lll // This is a long regex
-	maxAuthAttemptsExceedRE = regexp.MustCompile("^authentication attempts exceeded for (?P<Username>\\S+) from (?P<Source>\\S+) port (?P<Port>\\d+) ssh2$")
+	maxAuthAttemptsExceededRE = regexp.MustCompile("^authentication attempts exceeded for (?P<Username>\\S+) from (?P<Source>\\S+) port (?P<Port>\\d+) ssh2$")
 
 	// revokedPublicKeyByFileRE matches an OpenSSH log message that
 	// occurs when the client's public key appears in the file named
@@ -287,7 +287,7 @@ var (
 	//	    sshkey_type(key), fp, options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileRE = regexp.MustCompile("^Authentication key (?P<Type>\\S+) (?P<Fingerprint>\\S+) revoked by file (?P<FilePath>\\S+)$")
+	revokedPublicKeyByFileRE = regexp.MustCompile("^Authentication key (?P<SSHKeyType>\\S+) (?P<SSHKeyFingerprint>\\S+) revoked by file (?P<FilePath>\\S+)$")
 
 	// revokedPublicKeyByFileErrRE matches an OpenSSH log message that
 	// occurs when checking a client's public key against the file named
@@ -302,5 +302,5 @@ var (
 	//	    options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileErrRE = regexp.MustCompile("^Error checking authentication key (?P<Type>\\S+) (?P<Fingerprint>\\S+) in revoked keys file (?P<FilePath>\\S+)$")
+	revokedPublicKeyByFileErrRE = regexp.MustCompile("^Error checking authentication key (?P<Type>\\S+) (?P<SSHKeyFingerprint>\\S+) in revoked keys file (?P<FilePath>\\S+)$")
 )
