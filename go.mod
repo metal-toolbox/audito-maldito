@@ -10,7 +10,7 @@ require (
 	github.com/go-logr/zapr v1.2.3
 	github.com/metal-toolbox/auditevent v0.8.0
 	github.com/nxadm/tail v1.4.8
-	github.com/prometheus/client_golang v1.15.0
+	github.com/prometheus/client_golang v1.15.1
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.1.0
