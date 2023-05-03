@@ -72,6 +72,11 @@ const (
 	idxCertUserID    = "UserID"
 	idxCertSerial    = "Serial"
 	idxCertCA        = "CA"
+	idxShell         = "Shell"
+	idxDNSName       = "DNSName"
+	idxFilePath      = "FilePath"
+	idxSSHKeyType    = "SSHKeyType"
+	idxSSHKeyFP      = "SSHKeyFingerprint"
 )
 
 var logger *zap.SugaredLogger
