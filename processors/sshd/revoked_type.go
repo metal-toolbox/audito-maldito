@@ -76,7 +76,7 @@ func revokedPublicKeyByFileErr(config *SshdProcessorer) error {
 	return nil
 }
 
-func revokedLogToAuditEvent(keyType string, fingerprint string, filePath string, config *SshdProcessorer) *auditevent.AuditEvent {
+func revokedLogToAuditEvent(keyType, fingerprint, filePath string, config *SshdProcessorer) *auditevent.AuditEvent {
 	evt := auditevent.NewAuditEvent(
 		common.ActionLoginIdentifier,
 		auditevent.EventSource{

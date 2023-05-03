@@ -92,7 +92,7 @@ func doesNotMapBackToAddr(config *SshdProcessorer) error {
 	return nil
 }
 
-func dnsLogToAuditEvent(dnsName string, source string, config *SshdProcessorer) *auditevent.AuditEvent {
+func dnsLogToAuditEvent(dnsName, source string, config *SshdProcessorer) *auditevent.AuditEvent {
 	evt := auditevent.NewAuditEvent(
 		common.ActionLoginIdentifier,
 		auditevent.EventSource{

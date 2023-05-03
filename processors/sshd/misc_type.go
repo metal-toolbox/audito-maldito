@@ -104,6 +104,7 @@ func badOwnerOrModesForHostFile(config *SshdProcessorer) error {
 	return nil
 }
 
+//nolint:dupl // No lint
 func maxAuthAttemptsExceeded(config *SshdProcessorer) error {
 	matches := maxAuthAttemptsExceededRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
@@ -159,6 +160,7 @@ func maxAuthAttemptsExceeded(config *SshdProcessorer) error {
 	return nil
 }
 
+//nolint:dupl // No lint
 func failedPasswordAuth(config *SshdProcessorer) error {
 	matches := failedPasswordAuthRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
