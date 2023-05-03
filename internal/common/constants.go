@@ -8,4 +8,5 @@ const (
 
 const (
 	UnknownUser = "unknown"
+	UnknownAddr = "unknown"
 )
