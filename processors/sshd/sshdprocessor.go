@@ -148,6 +148,9 @@ func ProcessEntry(config *SshdProcessorer) error {
 	case revokedPublicKeyByFileErrRE.MatchString(config.logEntry):
 		entryFunc = revokedPublicKeyByFileErr
 		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case failedPasswordAuthRE.MatchString(config.logEntry):
+		entryFunc = failedPasswordAuth
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 	}
 
 	if entryFunc != nil {

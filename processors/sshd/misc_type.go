@@ -158,3 +158,58 @@ func maxAuthAttemptsExceeded(config *SshdProcessorer) error {
 
 	return nil
 }
+
+func failedPasswordAuth(config *SshdProcessorer) error {
+	matches := failedPasswordAuthRE.FindStringSubmatch(config.logEntry)
+	if matches == nil {
+		logger.Infoln("got failedPasswordAuth log with no string sub-matches")
+		return nil
+	}
+
+	var username string
+	usernameIdx := failedPasswordAuthRE.SubexpIndex(idxLoginUserName)
+	if usernameIdx > -1 {
+		username = matches[usernameIdx]
+	}
+
+	var source string
+	sourceIdx := failedPasswordAuthRE.SubexpIndex(idxLoginSource)
+	if sourceIdx > -1 {
+		source = matches[sourceIdx]
+	}
+
+	var port string
+	portIdx := failedPasswordAuthRE.SubexpIndex(idxLoginPort)
+	if portIdx > -1 {
+		port = matches[portIdx]
+	}
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: source,
+			Extra: map[string]any{
+				"port": port,
+			},
+		},
+		auditevent.OutcomeFailed,
+		map[string]string{
+			"loggedAs": username,
+			"userID":   common.UnknownUser,
+			"pid":      config.pid,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
+	})
+
+	evt.LoggedAt = config.when
+
+	if err := config.eventW.Write(evt); err != nil {
+		return fmt.Errorf("failed to write event: %w", err)
+	}
+
+	return nil
+}
