@@ -8,6 +8,61 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 )
 
+func processAcceptedPasswordEntry(config *SshdProcessorer) error {
+	matches := passwordLoginRE.FindStringSubmatch(config.logEntry)
+	if matches == nil {
+		logger.Infoln("got processAcceptedPasswordEntry log with no string sub-matches")
+		return nil
+	}
+
+	var username string
+	usernameIdx := passwordLoginRE.SubexpIndex(idxLoginUserName)
+	if usernameIdx > -1 {
+		username = matches[usernameIdx]
+	}
+
+	var source string
+	sourceIdx := passwordLoginRE.SubexpIndex(idxLoginSource)
+	if sourceIdx > -1 {
+		source = matches[sourceIdx]
+	}
+
+	var port string
+	portIdx := passwordLoginRE.SubexpIndex(idxLoginPort)
+	if portIdx > -1 {
+		port = matches[portIdx]
+	}
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: source,
+			Extra: map[string]any{
+				"port": port,
+			},
+		},
+		auditevent.OutcomeSucceeded,
+		map[string]string{
+			"loggedAs": username,
+			"userID":   common.UnknownUser,
+			"pid":      config.pid,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
+	})
+
+	evt.LoggedAt = config.when
+
+	if err := config.eventW.Write(evt); err != nil {
+		return fmt.Errorf("failed to write event: %w", err)
+	}
+
+	return nil
+}
+
 func rootLoginRefused(config *SshdProcessorer) error {
 	matches := rootLoginRefusedRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {

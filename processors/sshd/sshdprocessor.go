@@ -124,6 +124,9 @@ func ProcessEntry(config *SshdProcessorer) error {
 	case strings.HasPrefix(config.logEntry, "User "):
 		entryFunc = userTypeLogAuditFn(config)
 		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
+	case strings.HasPrefix(config.logEntry, "Accepted password"):
+		entryFunc = processAcceptedPasswordEntry
+		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 	case rootLoginRefusedRE.MatchString(config.logEntry):
 		entryFunc = rootLoginRefused
 		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
