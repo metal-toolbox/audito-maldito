@@ -117,15 +117,15 @@ func ProcessEntry(config *SshdProcessorer) error {
 	switch {
 	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
+	case strings.HasPrefix(config.logEntry, "Accepted password"):
+		entryFunc = processAcceptedPasswordEntry
+		config.metrics.IncLogins(metrics.PasswordLogin, metrics.Success)
 	case strings.HasPrefix(config.logEntry, "Certificate invalid"):
 		entryFunc = processCertificateInvalidEntry
 	case strings.HasPrefix(config.logEntry, "Invalid user"):
 		entryFunc = processInvalidUserEntry
 	case strings.HasPrefix(config.logEntry, "User "):
 		entryFunc = userTypeLogAuditFn(config)
-		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
-	case strings.HasPrefix(config.logEntry, "Accepted password"):
-		entryFunc = processAcceptedPasswordEntry
 		config.metrics.IncLogins(metrics.UnknownLogin, metrics.Failure)
 	case rootLoginRefusedRE.MatchString(config.logEntry):
 		entryFunc = rootLoginRefused
@@ -324,6 +324,62 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 	}:
 		return nil
 	}
+}
+
+func processAcceptedPasswordEntry(config *SshdProcessorer) error {
+	matches := passwordLoginRE.FindStringSubmatch(config.logEntry)
+	if matches == nil {
+		logger.Infoln("got processAcceptedPasswordEntry log with no string sub-matches")
+		return nil
+	}
+	config.metrics.IncLogins(metrics.PasswordLogin, metrics.Success)
+
+	var username string
+	usernameIdx := passwordLoginRE.SubexpIndex(idxLoginUserName)
+	if usernameIdx > -1 {
+		username = matches[usernameIdx]
+	}
+
+	var source string
+	sourceIdx := passwordLoginRE.SubexpIndex(idxLoginSource)
+	if sourceIdx > -1 {
+		source = matches[sourceIdx]
+	}
+
+	var port string
+	portIdx := passwordLoginRE.SubexpIndex(idxLoginPort)
+	if portIdx > -1 {
+		port = matches[portIdx]
+	}
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: source,
+			Extra: map[string]any{
+				"port": port,
+			},
+		},
+		auditevent.OutcomeSucceeded,
+		map[string]string{
+			"loggedAs": username,
+			"userID":   common.UnknownUser,
+			"pid":      config.pid,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
+	})
+
+	evt.LoggedAt = config.when
+
+	if err := config.eventW.Write(evt); err != nil {
+		return fmt.Errorf("failed to write event: %w", err)
+	}
+
+	return nil
 }
 
 func getCertificateInvalidReason(logentry string) string {
