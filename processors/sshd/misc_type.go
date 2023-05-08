@@ -6,6 +6,7 @@ import (
 	"github.com/metal-toolbox/auditevent"
 
 	"github.com/metal-toolbox/audito-maldito/internal/common"
+	"github.com/metal-toolbox/audito-maldito/internal/metrics"
 )
 
 func processAcceptedPasswordEntry(config *SshdProcessorer) error {
@@ -14,6 +15,7 @@ func processAcceptedPasswordEntry(config *SshdProcessorer) error {
 		logger.Infoln("got processAcceptedPasswordEntry log with no string sub-matches")
 		return nil
 	}
+	config.metrics.IncLogins(metrics.PasswordLogin, metrics.Success)
 
 	var username string
 	usernameIdx := passwordLoginRE.SubexpIndex(idxLoginUserName)
