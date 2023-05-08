@@ -223,7 +223,7 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 
 	evt.LoggedAt = config.when
 
-	// SSHLogin
+	// SSHLogin with certificate/ssh key but no cert info
 	if len(config.logEntry) == len(matches[0]) {
 		// TODO: This log message is incorrect... but I am not sure
 		//  what this logic is trying to accomplish.
@@ -251,7 +251,7 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 	certIdentifierStringStart := len(matches[0]) + 1
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
-	// RemoteUserLogin with extra padding
+	// SSHLogin with certificate/ssh key without CA info but has extra padding
 	if idMatches == nil {
 		logger.Infoln("b: got login entry with no matches for certificate identifiers")
 
@@ -297,6 +297,8 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 
 	// Increment metric even if it fails to write the event
 	config.metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
+
+	// SSHLogin with certificate/ssh key with CA info
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
