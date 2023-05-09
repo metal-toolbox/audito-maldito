@@ -341,13 +341,13 @@ type user struct {
 	cached []*aucoalesce.Event    // list of events tied to the user
 }
 
-// setRemoteUserLoginInfo sets the remote user login for a user
+// setRemoteUserLoginInfo sets the remote user login for a user.
 func (o *user) setRemoteUserLoginInfo(login common.RemoteUserLogin) {
 	o.hasRUL = true
 	o.login = login
 }
 
-// hasRemoteUserLoginInfo checks if there is a remote user login present for the user
+// hasRemoteUserLoginInfo checks if there is a remote user login present for the user.
 func (o *user) hasRemoteUserLoginInfo() bool {
 	return o.hasRUL
 }
