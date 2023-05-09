@@ -83,7 +83,9 @@ func userNonExistentShell(config *SshdProcessorer) error {
 	}
 
 	evt := userLogToAuditEvent(username, common.UnknownAddr, config)
-	evt.Metadata.Extra["shell"] = shell
+	evt.Metadata.Extra = map[string]any{
+		"shell": shell,
+	}
 
 	evt.LoggedAt = config.when
 	if err := config.eventW.Write(evt); err != nil {
@@ -113,7 +115,9 @@ func userNonExecutableShell(config *SshdProcessorer) error {
 	}
 
 	evt := userLogToAuditEvent(username, common.UnknownAddr, config)
-	evt.Metadata.Extra["shell"] = shell
+	evt.Metadata.Extra = map[string]any{
+		"shell": shell,
+	}
 
 	if err := config.eventW.Write(evt); err != nil {
 		return fmt.Errorf("failed to write event: %w", err)
