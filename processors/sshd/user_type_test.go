@@ -6,14 +6,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metal-toolbox/auditevent"
 	"github.com/stretchr/testify/require"
 
-	"github.com/metal-toolbox/auditevent"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
+// The linter made me do this, sorry.
+const (
+	username = "foo foo"
+	source   = "bar"
+)
+
 func TestUserTypeLogAuditFn(t *testing.T) {
+	t.Parallel()
+
 	logStrs := []string{
 		"User u from s not allowed because not listed in AllowUsers",
 		"User u not allowed because shell s does not exist",
@@ -37,9 +45,6 @@ func TestUserTypeLogAuditFn(t *testing.T) {
 func TestProcessNotInAllowUsersEntry(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
-	source := "bar"
-
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because not listed in AllowUsers",
 			username, source))
@@ -60,7 +65,6 @@ func TestProcessNotInAllowUsersEntry(t *testing.T) {
 func TestUserNonExistentShell(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
 	shell := "/bin/foo"
 
 	p, events := newUserLogSSHDProcessor(t,
@@ -83,7 +87,6 @@ func TestUserNonExistentShell(t *testing.T) {
 func TestUserNonExecutableShell(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
 	shell := "/bin/foo"
 
 	p, events := newUserLogSSHDProcessor(t,
@@ -106,9 +109,6 @@ func TestUserNonExecutableShell(t *testing.T) {
 func TestUserInDenyUsers(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
-	source := "bar"
-
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because listed in DenyUsers",
 			username, source))
@@ -128,9 +128,6 @@ func TestUserInDenyUsers(t *testing.T) {
 
 func TestUserNotInAnyGroup(t *testing.T) {
 	t.Parallel()
-
-	username := "foo foo"
-	source := "bar"
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because not in any group",
@@ -152,9 +149,6 @@ func TestUserNotInAnyGroup(t *testing.T) {
 func TestUserGroupInDenyGroups(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
-	source := "bar"
-
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because a group is listed in DenyGroups",
 			username, source))
@@ -175,9 +169,6 @@ func TestUserGroupInDenyGroups(t *testing.T) {
 func TestUserGroupNotListedInAllowGroups(t *testing.T) {
 	t.Parallel()
 
-	username := "foo foo"
-	source := "bar"
-
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because none of user's groups are listed in AllowGroups",
 			username, source))
@@ -195,7 +186,9 @@ func TestUserGroupNotListedInAllowGroups(t *testing.T) {
 	}
 }
 
-func newUserLogSSHDProcessor(t *testing.T, logEntry string) (*SshdProcessorer, <-chan *auditevent.AuditEvent) {
+func newUserLogSSHDProcessor(t *testing.T, logEntry string) (x *SshdProcessorer, y <-chan *auditevent.AuditEvent) {
+	t.Helper()
+
 	events := make(chan *auditevent.AuditEvent, 1)
 
 	p := &SshdProcessorer{
