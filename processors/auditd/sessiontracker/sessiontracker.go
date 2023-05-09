@@ -308,7 +308,8 @@ func (o *sessionTracker) DeleteUsersWithoutLoginsBefore(t time.Time) {
 }
 
 // DeleteRemoteUserLoginsBefore takes a time parameter.
-// It iterates over remote user logins and checks if a login was before the timestamp, then it deletes that remote user login.
+// It iterates over remote user logins and checks if a login was before the timestamp,
+// then it deletes that remote user login.
 func (o *sessionTracker) DeleteRemoteUserLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
 	if o.l.Level().Enabled(zap.DebugLevel) {
