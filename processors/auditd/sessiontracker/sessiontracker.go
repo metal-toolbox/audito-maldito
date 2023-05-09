@@ -59,6 +59,8 @@ type sessionTracker struct {
 	l *zap.SugaredLogger
 }
 
+// RemoteLogin validates and checks if there is an auditd session already present for the
+// RemoteLogin passed as parameter. It modifies the user object by setting the remote login information.
 func (o *sessionTracker) RemoteLogin(rul common.RemoteUserLogin) error {
 	var debugLogger *zap.SugaredLogger
 	if o.l.Level().Enabled(zap.DebugLevel) {
@@ -124,6 +126,9 @@ func (o *sessionTracker) RemoteLogin(rul common.RemoteUserLogin) error {
 	return nil
 }
 
+// AuditdEvent takes coalesced event as parameter. It process only the events where Session is not blank or unset.
+// It checks if the event session is present in active audit sessions and then it triggers the audit with that session.
+// If the event is not present then it triggers the audit without the session.
 func (o *sessionTracker) AuditdEvent(event *aucoalesce.Event) error {
 	// TODO: Handle the "SystemAction" type (where session == "unset").
 	//  ps: "unset" is a string.
@@ -206,6 +211,9 @@ func (o *sessionTracker) auditEventWithSession(event *aucoalesce.Event, debugLog
 	})
 }
 
+// auditEventWithoutSession takes a coalesced event and a logger as a parameter. It checks if the event PID is present
+// in the remote user login PIDs. If found it deletes the event PID from the remote user login PIDs
+// Event session is added to Active audit sessions.
 func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debugLogger *zap.SugaredLogger) error {
 	// Create a new audit session.
 
@@ -271,6 +279,8 @@ func (o *sessionTracker) auditEventWithoutSession(event *aucoalesce.Event, debug
 	return nil
 }
 
+// DeleteUsersWithoutLoginsBefore it takes a time parameter. It iterates over active audit sessions.
+// If the session is added before the timestamp and the user does not have a remote login, then it deletes that session.
 func (o *sessionTracker) DeleteUsersWithoutLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
 	if o.l.Level().Enabled(zap.DebugLevel) {
@@ -297,6 +307,8 @@ func (o *sessionTracker) DeleteUsersWithoutLoginsBefore(t time.Time) {
 	})
 }
 
+// DeleteRemoteUserLoginsBefore takes a time parameter.
+// It iterates over remote user logins and checks if a login was before the timestamp, then it deletes that remote user login.
 func (o *sessionTracker) DeleteRemoteUserLoginsBefore(t time.Time) {
 	var debugLogger *zap.SugaredLogger
 	if o.l.Level().Enabled(zap.DebugLevel) {
@@ -321,22 +333,29 @@ func (o *sessionTracker) DeleteRemoteUserLoginsBefore(t time.Time) {
 }
 
 type user struct {
-	added  time.Time
-	srcPID int
-	hasRUL bool
-	login  common.RemoteUserLogin
-	cached []*aucoalesce.Event
+	added  time.Time              // the time when user was added
+	srcPID int                    // source PID
+	hasRUL bool                   // true if there is a remote user login
+	login  common.RemoteUserLogin // current remote user login
+	cached []*aucoalesce.Event    // list of events tied to the user
 }
 
+// setRemoteUserLoginInfo sets the remote user login for a user
 func (o *user) setRemoteUserLoginInfo(login common.RemoteUserLogin) {
 	o.hasRUL = true
 	o.login = login
 }
 
+// hasRemoteUserLoginInfo checks if there is a remote user login present for the user
 func (o *user) hasRemoteUserLoginInfo() bool {
 	return o.hasRUL
 }
 
+// toAuditEvent takes an array of coalesced events and returns and audit event
+// it maps the coalesced event to audit event and populates various fields like
+// outcome, login source, subjects from login source, component.
+// The event type is always User Action.
+// Process args is set in the event metadata.
 func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	outcome := auditevent.OutcomeFailed
 	switch ae.Result {
@@ -372,6 +391,7 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 		"object": ae.Summary.Object,
 	}
 
+	// set the process arguments in the event metadata
 	if len(ae.Process.Args) > 0 {
 		evt.Metadata.Extra["process_args"] = ae.Process.Args
 	}
@@ -379,6 +399,9 @@ func (o *user) toAuditEvent(ae *aucoalesce.Event) *auditevent.AuditEvent {
 	return evt
 }
 
+// writeAndClearCache takes an event writer as parameter.
+// It processes the cached coalesced events of the user and converts that to an audit event.
+// It then writes the audit event to the audit logs and then cleans the event cache of the user.
 func (o *user) writeAndClearCache(writer *auditevent.EventWriter) error {
 	if len(o.cached) == 0 {
 		return nil
