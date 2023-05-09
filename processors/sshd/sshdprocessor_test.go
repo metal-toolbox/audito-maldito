@@ -235,7 +235,6 @@ func TestEntryProcessing(t *testing.T) {
 		{
 			name: "Accept password entry",
 			args: args{
-				//nolint:lll // This is a test case
 				logentry: "Accepted password for auditomalditotesting from 127.0.0.1 port 666 ssh2",
 				nodename: "testnode",
 				mid:      "testmid",
