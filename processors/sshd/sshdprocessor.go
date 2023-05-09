@@ -327,6 +327,13 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 }
 
 func processAcceptedPasswordEntry(config *SshdProcessorer) error {
+	pid, err := strconv.Atoi(config.pid)
+	if err != nil {
+		logger.Errorf("failed to convert pid string to int ('%s') - %s",
+			config.pid, err)
+		return nil
+	}
+
 	matches := passwordLoginRE.FindStringSubmatch(config.logEntry)
 	if matches == nil {
 		logger.Infoln("got processAcceptedPasswordEntry log with no string sub-matches")
@@ -378,7 +385,16 @@ func processAcceptedPasswordEntry(config *SshdProcessorer) error {
 		return fmt.Errorf("failed to write event: %w", err)
 	}
 
-	return nil
+	select {
+	case <-config.ctx.Done():
+		return nil
+	case config.logins <- common.RemoteUserLogin{
+		Source:     evt,
+		PID:        pid,
+		CredUserID: common.UnknownUser,
+	}:
+		return nil
+	}
 }
 
 func getCertificateInvalidReason(logentry string) string {
