@@ -233,6 +233,37 @@ func TestEntryProcessing(t *testing.T) {
 			},
 		},
 		{
+			name: "Accept password entry",
+			args: args{
+				logentry: "Accepted password for auditomalditotesting from 127.0.0.1 port 666 ssh2",
+				nodename: "testnode",
+				mid:      "testmid",
+				pid:      "666",
+			},
+			expectsRemoteUserLoginChan: true,
+			want: &auditevent.AuditEvent{
+				Type:     common.ActionLoginIdentifier,
+				LoggedAt: expectedts,
+				Source: auditevent.EventSource{
+					Type:  "IP",
+					Value: "127.0.0.1",
+					Extra: map[string]any{
+						"port": "666",
+					},
+				},
+				Outcome: auditevent.OutcomeSucceeded,
+				Subjects: map[string]string{
+					"loggedAs": "auditomalditotesting",
+					"userID":   common.UnknownUser,
+					"pid":      "666",
+				},
+				Target: map[string]string{
+					"host":       "testnode",
+					"machine-id": "testmid",
+				},
+			},
+		},
+		{
 			name: "Invalid certificate: Entry with reason",
 			args: args{
 				logentry: "Certificate invalid: expired",

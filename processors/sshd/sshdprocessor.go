@@ -117,6 +117,9 @@ func ProcessEntry(config *SshdProcessorer) error {
 	switch {
 	case strings.HasPrefix(config.logEntry, "Accepted publickey"):
 		entryFunc = processAcceptPublicKeyEntry
+	case strings.HasPrefix(config.logEntry, "Accepted password"):
+		entryFunc = processAcceptedPasswordEntry
+		config.metrics.IncLogins(metrics.PasswordLogin, metrics.Success)
 	case strings.HasPrefix(config.logEntry, "Certificate invalid"):
 		entryFunc = processCertificateInvalidEntry
 	case strings.HasPrefix(config.logEntry, "Invalid user"):
@@ -220,7 +223,7 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 
 	evt.LoggedAt = config.when
 
-	// SSHLogin
+	// SSHLogin with certificate/ssh key but no cert info
 	if len(config.logEntry) == len(matches[0]) {
 		// TODO: This log message is incorrect... but I am not sure
 		//  what this logic is trying to accomplish.
@@ -248,7 +251,7 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 	certIdentifierStringStart := len(matches[0]) + 1
 	certIdentifierString := config.logEntry[certIdentifierStringStart:]
 	idMatches := certIDRE.FindStringSubmatch(certIdentifierString)
-	// RemoteUserLogin with extra padding
+	// SSHLogin with certificate/ssh key without CA info but has extra padding
 	if idMatches == nil {
 		logger.Infoln("b: got login entry with no matches for certificate identifiers")
 
@@ -294,6 +297,8 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 
 	// Increment metric even if it fails to write the event
 	config.metrics.IncLogins(metrics.SSHCertLogin, metrics.Success)
+
+	// SSHLogin with certificate/ssh key with CA info
 	if err := config.eventW.Write(evt); err != nil {
 		// NOTE(jaosorior): Not being able to write audit events
 		// merits us panicking here.
@@ -316,6 +321,77 @@ func processAcceptPublicKeyEntry(config *SshdProcessorer) error {
 		Source:     evt,
 		PID:        pid,
 		CredUserID: usernameFromCert,
+	}:
+		return nil
+	}
+}
+
+func processAcceptedPasswordEntry(config *SshdProcessorer) error {
+	pid, err := strconv.Atoi(config.pid)
+	if err != nil {
+		logger.Errorf("failed to convert pid string to int ('%s') - %s",
+			config.pid, err)
+		return nil
+	}
+
+	matches := passwordLoginRE.FindStringSubmatch(config.logEntry)
+	if matches == nil {
+		logger.Infoln("got processAcceptedPasswordEntry log with no string sub-matches")
+		return nil
+	}
+
+	var username string
+	usernameIdx := passwordLoginRE.SubexpIndex(idxLoginUserName)
+	if usernameIdx > -1 {
+		username = matches[usernameIdx]
+	}
+
+	var source string
+	sourceIdx := passwordLoginRE.SubexpIndex(idxLoginSource)
+	if sourceIdx > -1 {
+		source = matches[sourceIdx]
+	}
+
+	var port string
+	portIdx := passwordLoginRE.SubexpIndex(idxLoginPort)
+	if portIdx > -1 {
+		port = matches[portIdx]
+	}
+
+	evt := auditevent.NewAuditEvent(
+		common.ActionLoginIdentifier,
+		auditevent.EventSource{
+			Type:  "IP",
+			Value: source,
+			Extra: map[string]any{
+				"port": port,
+			},
+		},
+		auditevent.OutcomeSucceeded,
+		map[string]string{
+			"loggedAs": username,
+			"userID":   common.UnknownUser,
+			"pid":      config.pid,
+		},
+		"sshd",
+	).WithTarget(map[string]string{
+		"host":       config.nodeName,
+		"machine-id": config.machineID,
+	})
+
+	evt.LoggedAt = config.when
+
+	if err := config.eventW.Write(evt); err != nil {
+		return fmt.Errorf("failed to write event: %w", err)
+	}
+
+	select {
+	case <-config.ctx.Done():
+		return nil
+	case config.logins <- common.RemoteUserLogin{
+		Source:     evt,
+		PID:        pid,
+		CredUserID: common.UnknownUser,
 	}:
 		return nil
 	}

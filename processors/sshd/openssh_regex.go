@@ -70,6 +70,17 @@ var (
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
 	loginRE = regexp.MustCompile(`Accepted publickey for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
 
+	// passwordLoginRE matches the sshd password login log message,
+	// allowing us to extract information about the login attempt,
+	// when using a password
+	//
+	// Example:
+	//
+	//	Accepted password for auditomalditotesting from 127.0.0.1 port 45082 ssh2
+	//
+	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
+	passwordLoginRE = regexp.MustCompile(`Accepted password for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+`)
+
 	// failedPasswordAuthRE matches an OpenSSH log message that occurs
 	// when the user fails to authenticate with a password. This log
 	// message is a permutation of the one described by loginRE.
