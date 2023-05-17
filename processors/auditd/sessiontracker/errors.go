@@ -19,17 +19,17 @@ func (o *SessionTrackerError) ParsePIDFailed() bool {
 	return o.parsePIDFail
 }
 
-// AuditEventWriteFailed returns true when the audit event write fails
+// AuditEventWriteFailed returns true when the audit event write fails.
 func (o *SessionTrackerError) AuditEventWriteFailed() bool {
 	return o.auditWriteFail
 }
 
-// Error returns the error message
+// Error returns the error message.
 func (o *SessionTrackerError) Error() string {
 	return o.message
 }
 
-// Unwrap unwraps the error content
+// Unwrap unwraps the error content.
 func (o *SessionTrackerError) Unwrap() error {
 	return o.inner
 }
