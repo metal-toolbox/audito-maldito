@@ -83,6 +83,10 @@ func userNonExistentShell(config *SshdProcessorer) error {
 	}
 
 	evt := userLogToAuditEvent(username, common.UnknownAddr, config)
+	if evt.Metadata.Extra == nil {
+		evt.Metadata.Extra = make(map[string]any, 1)
+	}
+
 	evt.Metadata.Extra["shell"] = shell
 
 	evt.LoggedAt = config.when
@@ -113,6 +117,10 @@ func userNonExecutableShell(config *SshdProcessorer) error {
 	}
 
 	evt := userLogToAuditEvent(username, common.UnknownAddr, config)
+	if evt.Metadata.Extra == nil {
+		evt.Metadata.Extra = make(map[string]any, 1)
+	}
+
 	evt.Metadata.Extra["shell"] = shell
 
 	if err := config.eventW.Write(evt); err != nil {

@@ -25,5 +25,13 @@ func mainWithError() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return cmd.Run(ctx, os.Args, health.NewHealth(), nil)
+	args := os.Args[1:]
+
+	for _, p := range args {
+		if p == "--namedpipe" {
+			return cmd.RunNamedPipe(ctx, os.Args, health.NewHealth(), nil)
+		}
+	}
+	os.Stdout.WriteString("defaulting to journald command")
+	return cmd.RunJournald(ctx, os.Args, health.NewHealth(), nil)
 }

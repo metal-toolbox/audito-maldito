@@ -70,6 +70,17 @@ var (
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
 	loginRE = regexp.MustCompile(`Accepted publickey for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+: (?P<Alg>[\w -]+):(?P<SSHKeySum>\S+)`)
 
+	// passwordLoginRE matches the sshd password login log message,
+	// allowing us to extract information about the login attempt,
+	// when using a password
+	//
+	// Example:
+	//
+	//	Accepted password for auditomalditotesting from 127.0.0.1 port 45082 ssh2
+	//
+	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
+	passwordLoginRE = regexp.MustCompile(`Accepted password for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+`)
+
 	// failedPasswordAuthRE matches an OpenSSH log message that occurs
 	// when the user fails to authenticate with a password. This log
 	// message is a permutation of the one described by loginRE.
@@ -117,7 +128,7 @@ var (
 	//	   "not listed in AllowUsers", pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
-	notInAllowUsersRE = regexp.MustCompile(`User (?P<Username>\w+) from (?P<Source>\S+) not allowed because not listed in AllowUsers`)
+	notInAllowUsersRE = regexp.MustCompile(`^User (?P<Username>.*) from (?P<Source>\S+) not allowed because not listed in AllowUsers$`)
 
 	// userNonExistentShellRE matches an OpenSSH log message that
 	// occurs when the user's shell does not exist.
@@ -128,7 +139,7 @@ var (
 	//	   "does not exist", pw->pw_name, shell);
 	//
 	//nolint:lll // This is a long regex
-	userNonExistentShellRE = regexp.MustCompile(`^User (?P<Username>\S+) not allowed because shell (?P<Shell>\S+) does not exist$`)
+	userNonExistentShellRE = regexp.MustCompile(`^User (?P<Username>.*) not allowed because shell (?P<Shell>\S+) does not exist$`)
 
 	// userNonExecutableShellRE matches an OpenSSH log message that
 	// occurs when the user's shell is not executable.
@@ -139,7 +150,7 @@ var (
 	//	   "is not executable", pw->pw_name, shell);
 	//
 	//nolint:lll // This is a long regex
-	userNonExecutableShellRE = regexp.MustCompile(`^User (?P<Username>\S+) not allowed because shell (?P<Shell>\S+) is not executable$`)
+	userNonExecutableShellRE = regexp.MustCompile(`^User (?P<Username>.*) not allowed because shell (?P<Shell>\S+) is not executable$`)
 
 	// userInDenyUsersRE matches an OpenSSH log message that occurs
 	// when the user is listed in DenyUsers.
@@ -153,7 +164,7 @@ var (
 	//	   pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userInDenyUsersRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because listed in DenyUsers$`)
+	userInDenyUsersRE = regexp.MustCompile(`^User (?P<Username>.*) from (?P<Source>\S+) not allowed because listed in DenyUsers$`)
 
 	// userNotInAnyGroupRE matches an OpenSSH log message that
 	// occurs when the user is not in any group.
@@ -164,7 +175,7 @@ var (
 	//	   "not in any group", pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userNotInAnyGroupRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because not in any group$`)
+	userNotInAnyGroupRE = regexp.MustCompile(`^User (?P<Username>.*) from (?P<Source>\S+) not allowed because not in any group$`)
 
 	// userGroupInDenyGroupsRE matches an OpenSSH log message that
 	// occurs when the user's group is listed in DenyUsers.
@@ -178,7 +189,7 @@ var (
 	//	   pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userGroupInDenyGroupsRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because a group is listed in DenyGroups$`)
+	userGroupInDenyGroupsRE = regexp.MustCompile(`^User (?P<Username>.*) from (?P<Source>\S+) not allowed because a group is listed in DenyGroups$`)
 
 	// userGroupNotListedInAllowGroupsRE matches an OpenSSH log
 	// message that occurs when none of the user's groups appear
@@ -193,7 +204,7 @@ var (
 	//	    "in AllowGroups", pw->pw_name, hostname);
 	//
 	//nolint:lll // This is a long regex
-	userGroupNotListedInAllowGroupsRE = regexp.MustCompile(`^User (?P<Username>\S+) from (?P<Source>\S+) not allowed because none of user's groups are listed in AllowGroups$`)
+	userGroupNotListedInAllowGroupsRE = regexp.MustCompile(`^User (?P<Username>.*) from (?P<Source>\S+) not allowed because none of user's groups are listed in AllowGroups$`)
 
 	// rootLoginRefusedRE matches an OpenSSH log message that occurs
 	// when a root user login attempt fails.
