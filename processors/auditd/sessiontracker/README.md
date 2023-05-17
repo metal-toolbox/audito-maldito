@@ -2,7 +2,7 @@
 
 ## Auditor Interface.
 The `Auditor` interface can be implemented by adding `AuditdEvent()` method.
-The `AuditdEvent()` requires that the input event is validated 
+The `AuditdEvent()` requires that the input event is validated,
 against the list of available event sessions.
 
 ```go
