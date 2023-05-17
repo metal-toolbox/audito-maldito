@@ -1,8 +1,9 @@
-# Session Tracking Using Audito Maldito
+# Session Tracking Using Audito Maldito.
 
-## Auditor Interface
+## Auditor Interface.
 The `Auditor` interface can be implemented by adding `AuditdEvent()` method.
-The `AuditdEvent()` requires that the input event is validated against the list of available event sessions.
+The `AuditdEvent()` requires that the input event is validated 
+against the list of available event sessions.
 
 ```go
 type Auditor interface {
