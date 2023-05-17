@@ -42,7 +42,7 @@ It has these methods
         }
     }
     ```
-1. `AuditdEvent`
+2. `AuditdEvent`
     It's the primary method of this type, i.e., `sessionTracker`. It triggers the audit of the input audit event. A session is bound to it, if it matches a session in the session cache. If a session is bound then it calls `auditEventWithSession`, else it calls `auditEventWithoutSession`
 
     ### Usage
@@ -58,7 +58,7 @@ It has these methods
         return err
     }
     ```
-1. `DeleteUsersWithoutLoginsBefore`
+3. `DeleteUsersWithoutLoginsBefore`
     This method, as the name says, deletes the audit session before a given timestamp, if the user doesn't have a remote login.
 
     ### Usage
@@ -70,7 +70,7 @@ It has these methods
         st.DeleteUsersWithoutLoginsBefore(time.Now())
     }
     ```
-1. `DeleteRemoteUserLoginsBefore`
+4. `DeleteRemoteUserLoginsBefore`
     It iterates over remote user logins and checks if a login was before the timestamp, then it deletes that remote user login.
 
     ### Usage
@@ -94,8 +94,8 @@ It has these methods
 
     `SesstionTrackerError` tracks three different kinds of failures.
     1. Remote Login Failure
-    1. Parse PID Failure
-    1. Audit Write Failure
+    2. Parse PID Failure
+    3. Audit Write Failure
 
     Here is the struct for it
     ```go
