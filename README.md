@@ -18,6 +18,10 @@ please refer to [the auditevent library][auditevent-library].
 
 ## Audit event types
 
+### Session Tracking using Audito Maldito
+
+More Ddetails [here](processors/auditd/sessiontracker/READme.md)
+
 #### `UserLogin`
 
 Occurs when a user logs in.
