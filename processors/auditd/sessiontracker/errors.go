@@ -6,7 +6,7 @@ type SessionTrackerError struct {
 	parsePIDFail    bool   // set when PID of the session cannot be parsed
 	auditWriteFail  bool   // set when the audit event fails to write to event writer
 	message         string // the error message
-	inner           error  //the error object
+	inner           error  // the error object
 }
 
 // RemoteLoginFailed returns true if the remote login validation has failed
