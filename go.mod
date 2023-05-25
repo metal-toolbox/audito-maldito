@@ -7,11 +7,11 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/elastic/go-libaudit/v2 v2.3.2
 	github.com/fsnotify/fsnotify v1.6.0
-	github.com/go-logr/zapr v1.2.3
+	github.com/go-logr/zapr v1.2.4
 	github.com/metal-toolbox/auditevent v0.8.0
 	github.com/nxadm/tail v1.4.8
 	github.com/prometheus/client_golang v1.15.1
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.3
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.2.0
 )
