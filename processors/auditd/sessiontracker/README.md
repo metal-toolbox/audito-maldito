@@ -1,6 +1,7 @@
-# Session Tracking Using Audito Maldito.
+# Session Tracking Using Audito Maldito
 
-## Auditor Interface.
+## Auditor Interface
+
 The `Auditor` interface can be implemented by adding `AuditdEvent()` method.
 The `AuditdEvent()` requires that the input event is validated,
 against the list of available event sessions.
@@ -14,11 +15,13 @@ type Auditor interface {
 ## Session Tracker
 Session Tracker, `sessionTracker` is an implementation of the Auditor Interface.
 You may create a new seesion tracker object as
+
 ```go
 import "sessiontracker"
 
 var tracker = sessiontracker.NewSessionTracker(o.EventW, logger)
 ```
+
 It takes an `auditevent.EventWriter` and a `zap.SugaredLogger` object as parameters.
 
 It contains active auditd sessions, a map of PIDs and remote user logins, and obviously an `auditevent.EventWriter` and a `zap.SugaredLogger`.
@@ -28,6 +31,7 @@ It has these methods
     It validates and sets a remote login input
 
     ### Usage
+
     ```go
     import "github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
 
@@ -43,6 +47,7 @@ It has these methods
         }
     }
     ```
+
 2. `AuditdEvent`
     It's the primary method of this type, i.e., `sessionTracker`. It triggers the audit of the input audit event. A session is bound to it, if it matches a session in the session cache. If a session is bound then it calls `auditEventWithSession`, else it calls `auditEventWithoutSession`
 
@@ -59,10 +64,12 @@ It has these methods
         return err
     }
     ```
+
 3. `DeleteUsersWithoutLoginsBefore`
     This method, as the name says, deletes the audit session before a given timestamp, if the user doesn't have a remote login.
 
     ### Usage
+
     ```go
     import "github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
     
@@ -71,10 +78,12 @@ It has these methods
         st.DeleteUsersWithoutLoginsBefore(time.Now())
     }
     ```
+
 4. `DeleteRemoteUserLoginsBefore`
     It iterates over remote user logins and checks if a login was before the timestamp, then it deletes that remote user login.
 
     ### Usage
+
     ```go
     import "github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
     
@@ -99,6 +108,7 @@ It has these methods
     3. Audit Write Failure
 
     Here is the struct for it
+
     ```go
     // SessionTrackerError is used to return errors pertaining to session audits
     type SessionTrackerError struct {
@@ -112,6 +122,7 @@ It has these methods
 
     ### Usage
     You may retun a session tracker error, `SessionTrackerError`, as below
+    
     ```go
     return &SessionTrackerError{
         auditWriteFail: true,
