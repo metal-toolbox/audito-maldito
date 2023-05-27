@@ -13,6 +13,7 @@ type Auditor interface {
 ```
 
 ## Session Tracker
+
 Session Tracker, `sessionTracker` is an implementation of the Auditor Interface.
 You may create a new seesion tracker object as
 
@@ -52,6 +53,7 @@ It has these methods
     It's the primary method of this type, i.e., `sessionTracker`. It triggers the audit of the input audit event. A session is bound to it, if it matches a session in the session cache. If a session is bound then it calls `auditEventWithSession`, else it calls `auditEventWithoutSession`
 
     ### Usage
+
     ```go
     import "github.com/metal-toolbox/audito-maldito/processors/auditd/sessiontracker"
     
@@ -96,10 +98,11 @@ It has these methods
 		st.DeleteRemoteUserLoginsBefore(aMinuteAgo)
     }
     ```
-
-
+    
 ## Error Definitions
+
 ### Error Types
+
 1. SessionTrackerError 
 
     `SesstionTrackerError` tracks three different kinds of failures.
@@ -121,6 +124,7 @@ It has these methods
     ```
 
     ### Usage
+
     You may retun a session tracker error, `SessionTrackerError`, as below
     
     ```go
