@@ -250,7 +250,7 @@ var (
 	//	    "[%s] failed.", name, ntop);
 	//
 	//nolint:lll // This is a long regex
-	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<DNSName>\S+) \[(?P<Source>\S+)\\] failed.$`)
+	reverseMappingCheckFailedRE = regexp.MustCompile(`^reverse mapping checking getaddrinfo for (?P<DNSName>\S+) \[(?P<Source>\S+)\] failed.$`)
 
 	// doesNotMapBackToAddrRE matches an OpenSSH log message that
 	// occurs when the reverse DNS lookup yields a record that does
