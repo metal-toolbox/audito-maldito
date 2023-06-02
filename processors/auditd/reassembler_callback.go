@@ -23,9 +23,12 @@ type reassemblerCB struct {
 func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 	event, err := aucoalesce.CoalesceMessages(msgs)
 	if err != nil {
-		s.errors <- &reassemblerCBError{
+		select {
+		case s.errors <- &reassemblerCBError{
 			message: fmt.Sprintf("failed to coalesce audit messages - %s", err),
 			inner:   err,
+		}:
+		default:
 		}
 
 		return
@@ -38,9 +41,12 @@ func (s *reassemblerCB) ReassemblyComplete(msgs []*auparse.AuditMessage) {
 	aucoalesce.ResolveIDs(event)
 
 	if err := s.au.AuditdEvent(event); err != nil {
-		s.errors <- &reassemblerCBError{
+		select {
+		case s.errors <- &reassemblerCBError{
 			message: fmt.Sprintf("failed to audit audit event - %s", err),
 			inner:   err,
+		}:
+		default:
 		}
 	}
 }
