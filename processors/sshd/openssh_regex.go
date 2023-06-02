@@ -294,7 +294,7 @@ var (
 	//	    sshkey_type(key), fp, options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileRE = regexp.MustCompile(`^Authentication key (?P<SSHKeyType>\S+) (?P<SSHKeyFingerprint>\S+) revoked by file (?P<FilePath>\S+)$`)
+	revokedPublicKeyByFileRE = regexp.MustCompile(`^Authentication key (?P<SSHKeyType>[a-zA-Z0-9_-]+) (?P<SSHKeyFingerprint>.*) revoked by file (?P<FilePath>.*)$`)
 
 	// revokedPublicKeyByFileErrRE matches an OpenSSH log message that
 	// occurs when checking a client's public key against the file named
@@ -309,5 +309,5 @@ var (
 	//	    options.revoked_keys_file);
 	//
 	//nolint:lll // This is a long regex
-	revokedPublicKeyByFileErrRE = regexp.MustCompile(`^Error checking authentication key (?P<Type>\S+) (?P<SSHKeyFingerprint>\S+) in revoked keys file (?P<FilePath>\S+)$`)
+	revokedPublicKeyByFileErrRE = regexp.MustCompile(`^Error checking authentication key (?P<SSHKeyType>[a-zA-Z0-9_-]+) (?P<SSHKeyFingerprint>.*) in revoked keys file (?P<FilePath>.*)$`)
 )
