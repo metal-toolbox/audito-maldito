@@ -15,7 +15,7 @@ jobs:
     env:
       GOPROXY: https://proxy.golang.org,direct
     runs-on: ubuntu-latest
-    container: registry.fedoraproject.org/fedora-minimal:37
+    container: registry.fedoraproject.org/fedora-minimal:38
     steps:
       - name: Install dependencies
         run: |
