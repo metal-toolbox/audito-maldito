@@ -92,7 +92,7 @@ var (
 	//	Failed password for auditomalditotesting from 127.0.0.1 port 45082 ssh2
 	//
 	//nolint:lll // This is a long regex... pretty hard to cut it without making it less readable.
-	failedPasswordAuthRE = regexp.MustCompile(`^Failed password for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh[[:alnum:]]+$`)
+	failedPasswordAuthRE = regexp.MustCompile(`^Failed password for (?P<Username>.*) from (?P<Source>.*) port (?P<Port>\d+) ssh[[:alnum:]]+$`)
 
 	// certIDRE matches the sshd user-certificate log message,
 	// allowing us to extract information about the user's
@@ -226,7 +226,7 @@ var (
 	//	    pw->pw_name, user_hostfile);
 	//
 	//nolint:lll // This is a long regex
-	badOwnerOrModesForHostFileRE = regexp.MustCompile(`^Authentication refused for (?P<Username>\S+): bad owner or modes for (?P<FilePath>\S+)$`)
+	badOwnerOrModesForHostFileRE = regexp.MustCompile(`^Authentication refused for (?P<Username>.*): bad owner or modes for (?P<FilePath>.*)$`)
 
 	// nastyPTRRecordRE matches an OpenSSH log message that occurs
 	// when the DNS check yields a bad PTR record.
@@ -280,7 +280,7 @@ var (
 	//	    ssh_remote_port(ssh));
 	//
 	//nolint:lll // This is a long regex
-	maxAuthAttemptsExceededRE = regexp.MustCompile(`^authentication attempts exceeded for (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+) ssh2$`)
+	maxAuthAttemptsExceededRE = regexp.MustCompile(`^maximum authentication attempts exceeded for (?P<Username>.*) from (?P<Source>.*) port (?P<Port>\d+) ssh[[:alnum:]]+$`)
 
 	// revokedPublicKeyByFileRE matches an OpenSSH log message that
 	// occurs when the client's public key appears in the file named
