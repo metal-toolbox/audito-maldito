@@ -12,14 +12,14 @@ import (
 	"github.com/metal-toolbox/audito-maldito/internal/testtools"
 )
 
-const dnsName = "foo.com"
+const expDNSName = "foo.com"
 
 func TestNastyPTRRecord(t *testing.T) {
 	t.Parallel()
 
 	p, events := newDNSLogSSHDProcessor(t,
 		fmt.Sprintf("Nasty PTR record %q is set up for %s, ignoring",
-			dnsName, source))
+			expDNSName, expSource))
 
 	err := nastyPTRRecord(p)
 
@@ -27,8 +27,8 @@ func TestNastyPTRRecord(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, dnsName, event.Source.Extra["dns"])
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expDNSName, event.Source.Extra["dns"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -49,7 +49,7 @@ func TestReverseMappingCheckFailed(t *testing.T) {
 
 	p, events := newDNSLogSSHDProcessor(t,
 		fmt.Sprintf("reverse mapping checking getaddrinfo for %s [%s] failed.",
-			dnsName, source))
+			expDNSName, expSource))
 
 	err := reverseMappingCheckFailed(p)
 
@@ -57,8 +57,8 @@ func TestReverseMappingCheckFailed(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, dnsName, event.Source.Extra["dns"])
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expDNSName, event.Source.Extra["dns"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -79,7 +79,7 @@ func TestDoesNotMapBackToAddr(t *testing.T) {
 
 	p, events := newDNSLogSSHDProcessor(t,
 		fmt.Sprintf("Address %s maps to %s, but this does not map back to the address.",
-			source, dnsName))
+			expSource, expDNSName))
 
 	err := doesNotMapBackToAddr(p)
 
@@ -87,8 +87,8 @@ func TestDoesNotMapBackToAddr(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, dnsName, event.Source.Extra["dns"])
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expDNSName, event.Source.Extra["dns"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}

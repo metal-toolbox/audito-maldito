@@ -22,7 +22,7 @@ func TestRootLoginRefused(t *testing.T) {
 
 	p, events := newMiscLogSSHDProcessor(t,
 		fmt.Sprintf("ROOT LOGIN REFUSED FROM %s port %s",
-			source, expPort))
+			expSource, expPort))
 
 	err := rootLoginRefused(p)
 
@@ -30,7 +30,7 @@ func TestRootLoginRefused(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
+		require.Equal(t, expSource, event.Source.Value)
 		require.Equal(t, expPort, event.Source.Extra["port"])
 	default:
 		t.Fatal("expected a channel write - got none")
@@ -53,7 +53,7 @@ func TestBadOwnerOrModesForHostFile(t *testing.T) {
 
 	p, events := newMiscLogSSHDProcessor(t,
 		fmt.Sprintf("Authentication refused for %s: bad owner or modes for %s",
-			username, expFilePath))
+			expUsername, expFilePath))
 
 	err := badOwnerOrModesForHostFile(p)
 
@@ -61,7 +61,7 @@ func TestBadOwnerOrModesForHostFile(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, username, event.Subjects["loggedAs"])
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 		require.Equal(t, expFilePath, event.Subjects["filePath"])
 	default:
 		t.Fatal("expected a channel write - got none")
@@ -84,7 +84,7 @@ func TestMaxAuthAttemptsExceeded(t *testing.T) {
 
 	p, events := newMiscLogSSHDProcessor(t,
 		fmt.Sprintf("maximum authentication attempts exceeded for %s from %s port %s ssh2",
-			username, source, expPort))
+			expUsername, expSource, expPort))
 
 	err := maxAuthAttemptsExceeded(p)
 
@@ -92,8 +92,8 @@ func TestMaxAuthAttemptsExceeded(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, username, event.Subjects["loggedAs"])
-		require.Equal(t, source, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
+		require.Equal(t, expSource, event.Source.Value)
 		require.Equal(t, expPort, event.Source.Extra["port"])
 
 	default:
@@ -117,7 +117,7 @@ func TestFailedPasswordAuth(t *testing.T) {
 
 	p, events := newMiscLogSSHDProcessor(t,
 		fmt.Sprintf("Failed password for %s from %s port %s ssh2",
-			username, source, expPort))
+			expUsername, expSource, expPort))
 
 	err := failedPasswordAuth(p)
 
@@ -125,8 +125,8 @@ func TestFailedPasswordAuth(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, username, event.Subjects["loggedAs"])
-		require.Equal(t, source, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
+		require.Equal(t, expSource, event.Source.Value)
 		require.Equal(t, expPort, event.Source.Extra["port"])
 
 	default:
