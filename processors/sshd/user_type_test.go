@@ -15,8 +15,8 @@ import (
 
 // The linter made me do this, sorry.
 const (
-	username = "foo foo"
-	source   = "bar"
+	expUsername = "foo foo"
+	expSource   = "bar"
 )
 
 func TestUserTypeLogAuditFn(t *testing.T) {
@@ -47,7 +47,7 @@ func TestProcessNotInAllowUsersEntry(t *testing.T) {
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because not listed in AllowUsers",
-			username, source))
+			expUsername, expSource))
 
 	err := processNotInAllowUsersEntry(p)
 
@@ -55,8 +55,8 @@ func TestProcessNotInAllowUsersEntry(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -65,11 +65,11 @@ func TestProcessNotInAllowUsersEntry(t *testing.T) {
 func TestUserNonExistentShell(t *testing.T) {
 	t.Parallel()
 
-	shell := "/bin/foo"
+	expShell := "/bin/foo"
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s not allowed because shell %s does not exist",
-			username, shell))
+			expUsername, expShell))
 
 	err := userNonExistentShell(p)
 
@@ -77,8 +77,8 @@ func TestUserNonExistentShell(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, event.Metadata.Extra["shell"], shell)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expShell, event.Metadata.Extra["shell"])
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -87,11 +87,11 @@ func TestUserNonExistentShell(t *testing.T) {
 func TestUserNonExecutableShell(t *testing.T) {
 	t.Parallel()
 
-	shell := "/bin/foo"
+	expShell := "/bin/foo"
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s not allowed because shell %s is not executable",
-			username, shell))
+			expUsername, expShell))
 
 	err := userNonExecutableShell(p)
 
@@ -99,8 +99,8 @@ func TestUserNonExecutableShell(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, event.Metadata.Extra["shell"], shell)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expShell, event.Metadata.Extra["shell"])
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -111,7 +111,7 @@ func TestUserInDenyUsers(t *testing.T) {
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because listed in DenyUsers",
-			username, source))
+			expUsername, expSource))
 
 	err := userInDenyUsers(p)
 
@@ -119,8 +119,8 @@ func TestUserInDenyUsers(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -131,7 +131,7 @@ func TestUserNotInAnyGroup(t *testing.T) {
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because not in any group",
-			username, source))
+			expUsername, expSource))
 
 	err := userNotInAnyGroup(p)
 
@@ -139,8 +139,8 @@ func TestUserNotInAnyGroup(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -151,7 +151,7 @@ func TestUserGroupInDenyGroups(t *testing.T) {
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because a group is listed in DenyGroups",
-			username, source))
+			expUsername, expSource))
 
 	err := userGroupInDenyGroups(p)
 
@@ -159,8 +159,8 @@ func TestUserGroupInDenyGroups(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
@@ -171,7 +171,7 @@ func TestUserGroupNotListedInAllowGroups(t *testing.T) {
 
 	p, events := newUserLogSSHDProcessor(t,
 		fmt.Sprintf("User %s from %s not allowed because none of user's groups are listed in AllowGroups",
-			username, source))
+			expUsername, expSource))
 
 	err := userGroupNotListedInAllowGroups(p)
 
@@ -179,8 +179,8 @@ func TestUserGroupNotListedInAllowGroups(t *testing.T) {
 
 	select {
 	case event := <-events:
-		require.Equal(t, source, event.Source.Value)
-		require.Equal(t, event.Subjects["loggedAs"], username)
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
 	default:
 		t.Fatal("expected a channel write - got none")
 	}
