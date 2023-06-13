@@ -49,8 +49,6 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 	ctx, cancelFn := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelFn()
 
-	ourPrivateKeyPath := setupUbuntuComputer(t, ctx)
-
 	// Required by audito-maldito.
 	t.Setenv("NODE_NAME", "integration-test")
 
@@ -71,22 +69,30 @@ func TestSSHCertLoginAndExecStuff_Ubuntu(t *testing.T) {
 
 	checkPipelineErrs, onEventFn := newShellPipelineChecker(ctx, expectedShellPipeline)
 
-	readEventsErrs := createPipeAndReadEvents(t, ctx, "/app-audit/audit.log", onEventFn)
+	appEventsOutputFilePath := "/app-audit/app-events-output-test.log"
+	readEventsErrs := createPipeAndReadEvents(t, ctx, appEventsOutputFilePath, onEventFn)
 
 	appHealth := health.NewHealth()
 
-	tmoutctx, tmoutctxFn := context.WithTimeout(ctx, time.Minute)
+	tmoutctx, tmoutctxFn := context.WithTimeout(ctx, time.Minute*5)
 	defer tmoutctxFn()
 
 	appErrs := make(chan error, 1)
 	go func() {
-		appErrs <- cmd.RunJournald(ctx, []string{"audito-maldito"}, appHealth, zapLoggerConfig())
+		appErrs <- cmd.RunNamedPipe(tmoutctx, []string{"audito-maldito", "--app-events-output", appEventsOutputFilePath}, appHealth, zapLoggerConfig())
 	}()
+
+	// let audito-maldito start
+	time.Sleep(30 * time.Second)
+	ourPrivateKeyPath := setupUbuntuComputer(t, tmoutctx)
 
 	err := <-appHealth.WaitForReady(tmoutctx)
 	if err != nil {
 		t.Fatalf("failed to wait for app to become ready - %s", err)
 	}
+
+	// Required by audito-maldito.
+	t.Setenv("NODE_NAME", "integration-test")
 
 	err = execSSHPipeline(ctx, ourPrivateKeyPath, expectedShellPipeline)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/go-logr/zapr"
 	"github.com/metal-toolbox/auditevent"
@@ -28,7 +29,6 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 	var appEventsOutput string
 	var auditdLogFilePath string
 	var sshdLogFilePath string
-	var enableMetrics bool
 	var metricsConfig metricsConfig
 
 	logLevel := zapcore.InfoLevel
@@ -38,11 +38,23 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 	flagSet.Var(&logLevel, "log-level", "Set the log level according to zapcore.Level")
 	flagSet.BoolVar(&metricsConfig.enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
 	flagSet.BoolVar(&metricsConfig.enableHealthz, "healthz", false, "Enable HTTP health endpoints server")
+	flagSet.BoolVar(&metricsConfig.enableAuditMetrics, "audit-metrics", false, "Enable Prometheus audit metrics")
+
 	flagSet.DurationVar(&metricsConfig.httpServerReadTimeout, "http-server-read-timeout",
 		DefaultHTTPServerReadTimeout, "HTTP server read timeout")
 	flagSet.DurationVar(&metricsConfig.httpServerReadHeaderTimeout, "http-server-read-header-timeout",
 		DefaultHTTPServerReadHeaderTimeout, "HTTP server read header timeout")
-	flagSet.BoolVar(&enableMetrics, "metrics", false, "Enable Prometheus HTTP /metrics server")
+	flagSet.DurationVar(
+		&metricsConfig.auditMetricsSecondsInterval,
+		"audit-seconds-interval",
+		DefaultAuditCheckInterval,
+		"Interval in seconds to collect audit metrics")
+	flagSet.IntVar(
+		&metricsConfig.auditLogWriteTimeSecondThreshold,
+		"audit-log-last-modify-seconds-threshold",
+		DefaultAuditModifyTimeThreshold,
+		"seconds since last write to audit.log before alerting")
+
 	flagSet.StringVar(
 		&appEventsOutput,
 		"app-events-output",
@@ -51,7 +63,7 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 	flagSet.StringVar(
 		&sshdLogFilePath,
 		"sshd-log-file-path",
-		"/app/audit/sshd-pipe",
+		"/app-audit/sshd-pipe",
 		"Path to the sshd log file")
 	flagSet.StringVar(
 		&auditdLogFilePath,
@@ -59,6 +71,11 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 		"/app-audit/audit-pipe",
 		"Path to the audit log file")
 
+	flagSet.Usage = func() {
+		os.Stderr.WriteString(usage)
+		flagSet.PrintDefaults()
+		os.Exit(1)
+	}
 	err := flagSet.Parse(osArgs[1:])
 	if err != nil {
 		return err
@@ -115,6 +132,7 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 
 	logger.Infoln("starting workers...")
 	handleMetricsAndHealth(groupCtx, metricsConfig, eg, h)
+	handleAuditLogMetrics(groupCtx, metricsConfig, eg, pprov)
 
 	h.AddReadiness(namedpipe.NamedPipeProcessorComponentName)
 	eg.Go(func() error {
@@ -140,10 +158,8 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 
 	h.AddReadiness(namedpipe.NamedPipeProcessorComponentName)
 	eg.Go(func() error {
-		alp := auditlog.AuditLogIngester{
-			FilePath:     auditdLogFilePath,
-			AuditLogChan: auditLogChan,
-		}
+		np := namedpipe.NewNamedPipeIngester(logger, h)
+		alp := auditlog.NewAuditLogIngester(auditdLogFilePath, auditLogChan, np)
 
 		err := alp.Ingest(groupCtx)
 		if logger.Level().Enabled(zap.DebugLevel) {
