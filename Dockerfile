@@ -15,7 +15,7 @@ COPY main.go .
 RUN go build -o audito-maldito
 
 # Not using distroless nor scratch because we need the systemd shared libraries
-FROM alpine:3.17.3
+FROM ubuntu:22.04
 # NOTE(jaosorior): Yes, we need to be the root user for this case.
 # We need access to the journal's privileged log entries and the audit log in the future.
 USER 0
