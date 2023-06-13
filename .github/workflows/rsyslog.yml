@@ -6,8 +6,8 @@ on:
     tags:
       - dev-v**    
 env:
-  REGISTRY: ghcr.io/metal-toolbox/audito-maldito
-  API_IMAGE_NAME: audito-maldito
+  REGISTRY: ghcr.io/metal-toolbox
+  API_IMAGE_NAME: audito-maldito/audito-maldito
   Version: named-pipe-abstraction
 
 jobs:
