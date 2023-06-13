@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
-	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/elastic/go-libaudit/v2 v2.3.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/zapr v1.2.4

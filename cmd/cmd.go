@@ -8,19 +8,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metal-toolbox/auditevent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/metal-toolbox/audito-maldito/ingesters/journald"
 	"github.com/metal-toolbox/audito-maldito/internal/common"
 	"github.com/metal-toolbox/audito-maldito/internal/health"
 	"github.com/metal-toolbox/audito-maldito/internal/metrics"
-	"github.com/metal-toolbox/audito-maldito/internal/util"
-	"github.com/metal-toolbox/audito-maldito/processors/sshd"
-	"github.com/metal-toolbox/audito-maldito/processors/varlogsecure"
 )
 
 const usage = `audito-maldito
@@ -106,67 +101,6 @@ func parseFlags(osArgs []string) (*appConfig, error) {
 	}
 
 	return config, nil
-}
-
-func runProcessorsForSSHLogins(
-	ctx context.Context,
-	logins chan<- common.RemoteUserLogin,
-	eg *errgroup.Group,
-	distro util.DistroType,
-	mid string,
-	nodename string,
-	bootID string,
-	lastReadJournalTS uint64,
-	eventWriter *auditevent.EventWriter,
-	h *health.Health,
-	pprov *metrics.PrometheusMetricsProvider,
-) {
-	sshdProcessor := sshd.NewSshdProcessor(ctx, logins, nodename, mid, eventWriter, pprov)
-
-	//nolint:exhaustive // In this case it's actually simpler to just default to journald
-	switch distro {
-	case util.DistroRocky:
-		h.AddReadiness(varlogsecure.VarLogSecureComponentName)
-
-		// TODO: handle last read timestamp
-		eg.Go(func() error {
-			vls := varlogsecure.VarLogSecure{
-				L:             logger,
-				Logins:        logins,
-				NodeName:      nodename,
-				MachineID:     mid,
-				AuWriter:      eventWriter,
-				Health:        h,
-				Metrics:       pprov,
-				SshdProcessor: sshdProcessor,
-			}
-
-			err := vls.Read(ctx)
-			logger.Infof("varlogsecure worker exited (%v)", err)
-			return err
-		})
-	default:
-		h.AddReadiness(journald.JournaldReaderComponentName)
-
-		eg.Go(func() error {
-			jp := journald.Processor{
-				BootID:        bootID,
-				MachineID:     mid,
-				NodeName:      nodename,
-				Distro:        distro,
-				EventW:        eventWriter,
-				Logins:        logins,
-				CurrentTS:     lastReadJournalTS,
-				Health:        h,
-				Metrics:       pprov,
-				SshdProcessor: sshdProcessor,
-			}
-
-			err := jp.Read(ctx)
-			logger.Infof("journald worker exited (%v)", err)
-			return err
-		})
-	}
 }
 
 // handleMetricsAndHealth starts a HTTP server on port 2112 to serve metrics
