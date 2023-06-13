@@ -6,7 +6,7 @@ on:
     tags:
       - dev-v**    
 env:
-  REGISTRY: ghcr.io/angrieralien
+  REGISTRY: ghcr.io/metal-toolbox
   API_IMAGE_NAME: audito-maldito
   Version: named-pipe-abstraction
 
