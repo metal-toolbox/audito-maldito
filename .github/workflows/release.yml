@@ -3,7 +3,6 @@ name: Create and publish a api image
 
 on:
   push:
-    branches: ['removes-coreos-systemd-go']
     tags:
       - v**
 env:
