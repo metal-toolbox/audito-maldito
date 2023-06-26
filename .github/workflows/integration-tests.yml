@@ -14,5 +14,16 @@ jobs:
       - name: Execute tests
         run: |
           sudo apt update
-          sudo apt install -y make gcc curl libsystemd-dev
+          sudo apt install -y make rsyslog
+          sudo cp contrib/rsyslog/config/rsyslog.conf /etc/rsyslog.conf
+          sudo rm -rf /etc/rsyslog.d
+          sudo mkdir /etc/rsyslog.d
+          sudo cp -r contrib/rsyslog/config/rsyslog.d/* /etc/rsyslog.d/
+          sudo mkdir -p /var/log/audito-maldito
+          sudo mkdir -p /app-audit
+          sudo mkfifo /app-audit/app-events-output-test.log
+          sudo mkfifo /app-audit/sshd-pipe
+          sudo mkfifo /app-audit/audit-pipe
+          sudo systemctl restart rsyslog
           sudo make integration-test
+          
