@@ -117,7 +117,7 @@ var (
 	//
 	//	logit("Invalid user %.100s from %.100s port %d",
 	//	    user, ssh_remote_ipaddr(ssh), ssh_remote_port(ssh));
-	invalidUserRE = regexp.MustCompile(`Invalid user (?P<Username>\w+) from (?P<Source>\S+) port (?P<Port>\d+)`)
+	invalidUserRE = regexp.MustCompile(`Invalid user (?P<Username>\S+) from (?P<Source>\S+) port (?P<Port>\d+)`)
 
 	// notInAllowUsersRE matches the sshd AllowUsers violation message,
 	// allowing us to extract information about the login violation.
