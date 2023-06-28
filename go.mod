@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.15.1
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/sync v0.2.0
+	golang.org/x/sync v0.3.0
 )
 
 replace github.com/elastic/go-libaudit/v2 v2.3.2 => github.com/metal-toolbox/go-libaudit/v2 v2.3.3
