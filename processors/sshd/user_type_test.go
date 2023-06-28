@@ -15,8 +15,8 @@ import (
 
 // The linter made me do this, sorry.
 const (
-	expUsername = "foo foo"
-	expSource   = "bar"
+	expUsername = "abc ABC !@#$%^&*() ,. <>? 123"
+	expSource   = "192.168.1.2:666 abc ABC !@#$%^&*() <>? 123.com"
 )
 
 func TestUserTypeLogAuditFn(t *testing.T) {
@@ -39,6 +39,27 @@ func TestUserTypeLogAuditFn(t *testing.T) {
 		if fn == nil {
 			t.Fatalf("expected nil func for log str '%s' - got nil", logStr)
 		}
+	}
+}
+
+func TestProcessAcceptedPasswordEntry(t *testing.T) {
+	t.Parallel()
+
+	p, events := newUserLogSSHDProcessor(t,
+		fmt.Sprintf("Accepted password for %s from %s port %s ssh2",
+			expUsername, expSource, expPort))
+
+	err := processAcceptedPasswordEntry(p)
+
+	require.NoError(t, err)
+
+	select {
+	case event := <-events:
+		require.Equal(t, expSource, event.Source.Value)
+		require.Equal(t, expUsername, event.Subjects["loggedAs"])
+		require.Equal(t, expPort, event.Source.Extra["port"])
+	default:
+		t.Fatal("expected a channel write - got none")
 	}
 }
 
@@ -192,11 +213,13 @@ func newUserLogSSHDProcessor(t *testing.T, logEntry string) (x *SshdProcessorer,
 	events := make(chan *auditevent.AuditEvent, 1)
 
 	p := &SshdProcessorer{
+		ctx:       context.Background(),
+		logins:    make(chan common.RemoteUserLogin, 1),
 		logEntry:  logEntry,
 		nodeName:  "a",
 		machineID: "b",
 		when:      time.Now(),
-		pid:       "c",
+		pid:       "1",
 		eventW: auditevent.NewAuditEventWriter(&testtools.TestAuditEncoder{
 			Ctx:    context.Background(),
 			Events: events,
