@@ -47,33 +47,3 @@ and executing:
 ```sh
 vagrant destroy
 ```
-
-## Other tests
-
-To test the daemon, you can run it locally, and then run the following command:
-
-```sh
-LIVE_INSTANCE=<some instance IP> make instance-test
-```
-
-This will download the necessary information from a running instance and run
-the container locally, using the downloaded information.
-
-Note that given that the journald files may be quite large, this may take a while.
-This also won't download them every time. If it detects that the files are already
-downloaded, it will use them.
-
-To view the audit logs, you can run:
-
-```sh
-tail -f live-instance-test/$LIVE_INSTANCE/run/audit.log
-```
-
-The `core` user is used by default to download information from a running instance.
-If you need to change it, you can do so by setting the `INSTANCE_USER` variable.
-
-To clean the downloaded information, run:
-
-```sh
-make clean-instance-test
-```
