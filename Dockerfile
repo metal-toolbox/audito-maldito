@@ -12,14 +12,14 @@ COPY internal ./internal
 COPY processors ./processors
 COPY main.go .
 
-RUN go build -o audito-maldito
+RUN CGO_ENABLED=0 go build -o audito-maldito
 
-# Not using distroless nor scratch because we need the systemd shared libraries
-FROM ubuntu:22.04
-# NOTE(jaosorior): Yes, we need to be the root user for this case.
-# We need access to the journal's privileged log entries and the audit log in the future.
-USER 0
+FROM gcr.io/distroless/static:nonroot
 
-COPY --from=builder /go/src/audito-maldito/audito-maldito /usr/bin/audito-maldito
+COPY --from=builder /go/src/audito-maldito/audito-maldito /
 
-ENTRYPOINT [ "/usr/bin/audito-maldito" ]
+# "NONROOT" comes from distroless:
+# https://github.com/GoogleContainerTools/distroless/blob/main/base/base.bzl
+USER 65532:65532
+
+ENTRYPOINT [ "/audito-maldito" ]
