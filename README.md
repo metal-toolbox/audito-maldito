@@ -14,7 +14,7 @@ details like the fingerprint and key ID will appear in each resulting
 audito-maldito audit event. These resulting events are written to
 a customizable file path.
 
-Sysadmins define audit policy using auditd's [audit.rules](audit.rules).
+Sysadmins define audit policy using auditd's [audit.rules][audit.rules].
 audito-maldito simply honors whatever Linux audit events appear in
 the Linux auditd event stream.
 
