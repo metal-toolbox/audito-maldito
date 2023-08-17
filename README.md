@@ -170,9 +170,9 @@ The following subsections discuss audito-maldito's configuration.
 audito-maldito reads input data from named pipes (FIFOs). It expects these
 data sources to be specified using the following arguments:
 
-- `-auditd-log-file-path` - The file path to a named pipe that produces
+- `-auditd-pipe-path` - The file path to a named pipe that produces
   Linux auditd events (i.e., events from "/var/log/audit/audit.log")
-- `-sshd-log-file-path` - The file path to a named pipe that produces
+- `-sshd-pipe-path` - The file path to a named pipe that produces
   OpenSSH sshd logs
 
 #### Required files
