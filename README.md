@@ -127,7 +127,7 @@ unit) or as a Kubernetes Daemonset. At Equinix Metal, we deploy the
 application in Kubernetes using a Helm chart. The chart relies on rsyslog,
 which is responsible for passing OpenSSH daemon logs and Linux audit logs
 to audito-maldito using named pipes. audito-maldito reads from these named
-pipes and then writes its audit events to another named pipe.
+pipes and then writes its audit events to a named pipe or file.
 
 The following subsections discuss several installation and deployment methods.
 
@@ -186,9 +186,9 @@ The following files are required by audito-maldito to run:
 
 #### Output data
 
-Audit events produced by audito-maldito are written to `/app-audit/audit.log`
-by default (this can be a regular file or a named pipe). This file path can
-be customized using the `-app-events-output` argument.
+Audit events produced by audito-maldito are written to the file path
+specified by the `-app-events-output` argument. This file path can be
+a regular file or a named pipe.
 
 ## Development
 
