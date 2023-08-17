@@ -124,33 +124,42 @@ Example:
 
 audito-maldito can be run as a standalone application (such as a systemd
 unit) or as a Kubernetes Daemonset. At Equinix Metal, we deploy the
-application in kubernetes using a Helm chart. The chart relies on rsyslog,
+application in Kubernetes using a Helm chart. The chart relies on rsyslog,
 which is responsible for passing OpenSSH daemon logs and Linux audit logs
 to audito-maldito using named pipes. audito-maldito reads from these named
 pipes and then writes its audit events to another named pipe.
 
 The following subsections discuss several installation and deployment methods.
 
-#### From source
+#### Standalone (from source or as a container)
 
-If you would like to build from source, you can use `go build` if you have
-a copy of the source code on hand:
+If you would like to run audito-maldito as a standalone application (i.e.,
+outside of Kubernetes), you can build it from source or use a pre-built
+container image.
+
+While not required, we recommend using `rsyslog` to pass OpenSSH logs and
+Linux audit logs into audito-maldito. An example rsyslog container image
+and rsyslog configuration can be found under:
+
+- [contrib/rsyslog](contrib/rsyslog)
+
+To build audito-maldito from source, execute the following command at the root
+of the repository:
 
 ```sh
 go build
 ```
+
+Pre-built container images for both audito-maldito and rsyslog can be found
+in GitHub's container registry:
+
+- https://github.com/metal-toolbox/audito-maldito/pkgs/container/audito-maldito%2Faudito-maldito
 
 #### Kubernetes
 
 A Helm chart can be found in the equinixmetal-helm GitHub organization:
 
 - https://github.com/equinixmetal-helm/audito-maldito
-
-#### Container image
-
-A pre-built container image can be found in GitHub's container registry:
-
-- https://github.com/metal-toolbox/audito-maldito/pkgs/container/audito-maldito%2Faudito-maldito
 
 ## Configuration
 
