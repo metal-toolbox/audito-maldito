@@ -62,14 +62,14 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 		"Path to the app events output")
 	flagSet.StringVar(
 		&sshdLogFilePath,
-		"sshd-log-file-path",
+		"sshd-pipe-path",
 		"/app-audit/sshd-pipe",
-		"Path to the sshd log file")
+		"Path to the sshd log named pipe file")
 	flagSet.StringVar(
 		&auditdLogFilePath,
-		"auditd-log-file-path",
+		"auditd-pipe-path",
 		"/app-audit/audit-pipe",
-		"Path to the audit log file")
+		"Path to the audit log named pipe file")
 
 	flagSet.Usage = func() {
 		os.Stderr.WriteString(usage)
