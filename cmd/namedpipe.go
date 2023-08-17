@@ -136,6 +136,12 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 
 	h.AddReadiness(namedpipe.NamedPipeProcessorComponentName)
 	eg.Go(func() error {
+		err := common.IsNamedPipe(sshdLogFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to check if sshd log path is a named pipe: %q - %w",
+				sshdLogFilePath, err)
+		}
+
 		sshdProcessor := sshd.NewSshdProcessor(groupCtx, logins, nodeName, mid, eventWriter, pprov)
 		npi := namedpipe.NewNamedPipeIngester(logger, h)
 		if distro == util.DistroRocky {
@@ -158,10 +164,16 @@ func RunNamedPipe(ctx context.Context, osArgs []string, h *health.Health, optLog
 
 	h.AddReadiness(namedpipe.NamedPipeProcessorComponentName)
 	eg.Go(func() error {
+		err := common.IsNamedPipe(auditdLogFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to check if auditd log path is a named pipe: %q - %w",
+				auditdLogFilePath, err)
+		}
+
 		np := namedpipe.NewNamedPipeIngester(logger, h)
 		alp := auditlog.NewAuditLogIngester(auditdLogFilePath, auditLogChan, np)
 
-		err := alp.Ingest(groupCtx)
+		err = alp.Ingest(groupCtx)
 		if logger.Level().Enabled(zap.DebugLevel) {
 			logger.Debugf("audit log ingester exited (%v)", err)
 		}
