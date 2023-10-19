@@ -8,7 +8,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/zapr v1.2.4
 	github.com/metal-toolbox/auditevent v0.8.0
-	github.com/nxadm/tail v1.4.8
 	github.com/prometheus/client_golang v1.17.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.26.0
