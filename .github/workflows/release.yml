@@ -7,7 +7,7 @@ on:
       - v**
 env:
   REGISTRY: ghcr.io/metal-toolbox
-  API_IMAGE_NAME: audito-maldito/audito-maldito
+  APP_IMAGE_NAME: audito-maldito/audito-maldito
 
 jobs:
   auto-release:
@@ -29,6 +29,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # needed for signing the images with GitHub OIDC Token
 
     steps:
       - name: Checkout repository
@@ -41,29 +42,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: sigstore/cosign-installer@v3.1.1
+        with:
+          cosign-release: "v2.2.1"
+
       - name: Get current date
         id: date
         run: echo "::set-output name=date::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta-api
-        uses: docker/metadata-action@62339db73c56dd749060f65a6ebb93a6e056b755
+      - name: Extract am metadata (tags, labels) for Docker
+        id: am-metadata
+        uses: docker/metadata-action@v5.3.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}
+
+      - name: Extract rsyslog metadata (tags, labels) for Docker
+        id: rsyslog-metadata
+        uses: docker/metadata-action@v5.3.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}-rsyslog
 
       - name: Build rsyslog and push Docker image
-        uses: docker/build-push-action@fdf7f43ecf7c1a5c7afe936410233728a8c2d9c2
+        id: rsyslog-build-push
+        uses: docker/build-push-action@v5.1.0
         with:
           context: "./contrib/rsyslog"
           push: true
           file: ./contrib/rsyslog/Dockerfile.ubuntu
-          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }}-rsyslog
-          labels: ${{ steps.meta-api.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}:${{ github.ref_name }}-rsyslog
+          labels: ${{ steps.rsyslog-metadata.outputs.labels }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@fdf7f43ecf7c1a5c7afe936410233728a8c2d9c2
+        id: am-build-push
+        uses: docker/build-push-action@v5.1.0
         with:
           push: true
           file: Dockerfile
-          tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }}
-          labels: ${{ steps.meta-api.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}:${{ github.ref_name }}
+          labels: ${{ steps.am-metadata.outputs.labels }}
+
+      - name: Sign audito-maldito container image
+        env:
+          DIGEST: ${{ steps.am-build-push.outputs.digest }}
+          TAGS: ${{ steps.am-metadata.outputs.tags }}
+        run: cosign sign -y -r "${TAGS}@${DIGEST}"
