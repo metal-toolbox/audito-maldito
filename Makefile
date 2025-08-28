@@ -1,4 +1,5 @@
 GOLANGCI_LINT_VERSION = v1.55.1
+GOFLAGS="-buildvcs=false"
 
 TOOLS_DIR = .tools
 
