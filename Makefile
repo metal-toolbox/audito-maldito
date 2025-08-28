@@ -1,5 +1,4 @@
 GOLANGCI_LINT_VERSION = v1.55.1
-GOFLAGS="-buildvcs=false"
 
 TOOLS_DIR = .tools
 
@@ -100,6 +99,7 @@ $(TOOLS_DIR)/golangci-lint:
 	export \
 		VERSION=$(GOLANGCI_LINT_VERSION) \
 		URL=https://raw.githubusercontent.com/golangci/golangci-lint \
+		GOFLAGS="-buildvcs=false" \
 		BINDIR=$(TOOLS_DIR) && \
 	curl -sfL $$URL/$$VERSION/install.sh | sh -s $$VERSION
 	$(TOOLS_DIR)/golangci-lint version
