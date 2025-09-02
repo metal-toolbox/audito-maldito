@@ -1,10 +1,10 @@
 module github.com/metal-toolbox/audito-maldito
 
-go 1.19
+go 1.21
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
-	github.com/elastic/go-libaudit/v2 v2.3.3
+	github.com/elastic/go-libaudit/v2 v2.6.2
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/zapr v1.2.4
 	github.com/metal-toolbox/auditevent v0.8.0
