@@ -42,9 +42,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: sigstore/cosign-installer@v3.1.1
+      - uses: sigstore/cosign-installer@v3.9.2
         with:
-          cosign-release: "v2.2.1"
+          cosign-release: "v2.5.3"
 
       - name: Get current date
         id: date
@@ -69,7 +69,7 @@ jobs:
           context: "./contrib/rsyslog"
           push: true
           file: ./contrib/rsyslog/Dockerfile.ubuntu
-          tags: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}:${{ github.ref_name }}-rsyslog
+          tags: ${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}-rsyslog:${{ github.ref_name }}
           labels: ${{ steps.rsyslog-metadata.outputs.labels }}
 
       - name: Build and push Docker image
@@ -85,4 +85,20 @@ jobs:
         env:
           DIGEST: ${{ steps.am-build-push.outputs.digest }}
           TAGS: ${{ steps.am-metadata.outputs.tags }}
-        run: cosign sign -y -r "${TAGS}@${DIGEST}"
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign -y -r ${images}
+
+      - name: Sign rsyslog container image
+        env:
+          DIGEST: ${{ steps.rsyslog-build-push.outputs.digest }}
+          TAGS: ${{ steps.rsyslog-metadata.outputs.tags }}
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign -y -r ${images}
