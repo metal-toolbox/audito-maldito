@@ -64,7 +64,7 @@ jobs:
 
       - name: Build rsyslog and push Docker image
         id: rsyslog-build-push
-        uses: docker/build-push-action@v5.1.0
+        uses: docker/build-push-action@v5.4.0
         with:
           context: "./contrib/rsyslog"
           push: true
@@ -74,7 +74,7 @@ jobs:
 
       - name: Build and push Docker image
         id: am-build-push
-        uses: docker/build-push-action@v5.1.0
+        uses: docker/build-push-action@v5.4.0
         with:
           push: true
           file: Dockerfile
