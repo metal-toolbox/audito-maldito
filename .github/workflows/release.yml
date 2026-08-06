@@ -44,7 +44,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@v3.9.2
         with:
-          cosign-release: "v2.5.3"
+          cosign-release: "v2.6.5"
 
       - name: Get current date
         id: date
