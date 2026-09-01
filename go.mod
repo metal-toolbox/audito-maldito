@@ -1,11 +1,11 @@
 module github.com/metal-toolbox/audito-maldito
 
-go 1.19
+go 1.23
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/elastic/go-libaudit/v2 v2.3.3
-	github.com/fsnotify/fsnotify v1.7.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-logr/zapr v1.2.4
 	github.com/metal-toolbox/auditevent v0.8.0
 	github.com/prometheus/client_golang v1.17.0
@@ -31,7 +31,7 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
